@@ -1,0 +1,19 @@
+packages:
+  - "."
+
+strictDepBuilds: true
+dangerouslyAllowAllBuilds: false
+allowBuilds:
+  esbuild: true
+  workerd: true
+minimumReleaseAgeExclude:
+  - "@emdash-cms/admin@1.2.0"
+  - "@emdash-cms/auth@1.2.0"
+  - "@emdash-cms/blocks@1.2.0"
+  - "@emdash-cms/cloudflare@1.2.0"
+  - "@emdash-cms/gutenberg-to-portable-text@1.2.0"
+  - "@emdash-cms/plugin-cli@0.13.3"
+  - "@emdash-cms/plugin-test@0.2.8"
+  - "@emdash-cms/plugin-types@0.6.0"
+  - "@emdash-cms/registry-verification@0.3.4"
+  - emdash@1.2.0

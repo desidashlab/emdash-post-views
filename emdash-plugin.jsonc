@@ -1,0 +1,70 @@
+{
+	"$schema": "./node_modules/@emdash-cms/plugin-cli/schemas/emdash-plugin.schema.json",
+
+	"slug": "post-views",
+	"publisher": "did:plc:vvm75pgx6ihqfuil7y5awyge",
+
+	"name": "Post Views",
+	"description": "Privacy-first view counter. Popular posts on your dashboard and per-entry stats, with no third-party analytics.",
+	"keywords": ["views", "analytics", "popular posts", "statistics", "privacy"],
+	"repo": "https://github.com/desidashlab/emdash-post-views",
+
+	"license": "MIT",
+	"author": { "name": "DesiDash Lab" },
+	"security": { "email": "liquifysolutionsdev1@gmail.com" },
+
+	// Trust contract: read entries so we can confirm an entry exists and is
+	// published before counting, and store its title for the popular list.
+	"capabilities": ["content:read"],
+	"allowedHosts": [],
+
+	"storage": {
+		// One row per entry: running total + cached title/slug.
+		"totals": {
+			"indexes": ["total", "collection", "lastViewedAt", ["collection", "total"]]
+		},
+		// One row per entry per day, for "today" and "last 7 days".
+		"daily": {
+			"indexes": ["day", "entryKey", ["entryKey", "day"]]
+		},
+		// Hashed visitor+entry+day, so one visitor counts once a day.
+		"seen": {
+			"indexes": ["day"]
+		}
+	},
+
+	"admin": {
+		"pages": [{ "path": "/overview", "label": "Post Views", "icon": "chart" }],
+		"widgets": [{ "id": "popular", "title": "Popular posts", "size": "half" }],
+		"editorPanels": [
+			{
+				"id": "views",
+				"title": "Views",
+				"route": "editor/views",
+				"collections": ["posts", "pages"]
+			}
+		],
+		"settingsSchema": {
+			"collections": {
+				"label": "Counted collections",
+				"description": "Comma-separated collection slugs whose entries are counted.",
+				"type": "string",
+				"default": "posts,pages"
+			},
+			"uniquePerDay": {
+				"label": "Count each visitor once per day",
+				"description": "Uses a one-way hash of the visitor's IP and browser. No cookies, nothing personal stored.",
+				"type": "boolean",
+				"default": true
+			},
+			"retentionDays": {
+				"label": "Keep daily history for (days)",
+				"description": "Totals are kept forever. Per-day rows older than this are removed nightly.",
+				"type": "number",
+				"default": 90,
+				"min": 7,
+				"max": 730
+			}
+		}
+	}
+}
