@@ -125,6 +125,21 @@ describe("admin surfaces", () => {
 		expect(code && "code" in code ? code.code : "").toContain("/hit");
 	});
 
+	it("lets the admin pick a range and remembers it", async () => {
+		await hit(POST);
+		const changed = await host.admin.act("/overview", "set_range", { value: "30" });
+		const stats = changed.blocks.find((b) => b.type === "stats");
+		const labels = stats && "items" in stats ? stats.items.map((s) => s.label) : [];
+		expect(labels).toContain("Last 30 days");
+		expect(changed.blocks.some((b) => b.type === "chart")).toBe(true);
+
+		const reloaded = await host.admin.loadPage("/overview");
+		const table = reloaded.blocks.find((b) => b.type === "table");
+		const cols = table && "columns" in table ? table.columns.map((c) => c.label) : [];
+		expect(cols).toContain("Last 30 days");
+		expect(await host.inspect.kv.get("ui:rangeDays")).toBe(30);
+	});
+
 	it("shows an empty state on the widget before any views, then the most-read list", async () => {
 		const empty = await host.admin.loadWidget("popular");
 		expect(empty.blocks[0]?.type).toBe("empty");

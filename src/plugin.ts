@@ -28,6 +28,32 @@ interface SeenRow {
 }
 
 /* ------------------------------------------------------------------ */
+/* Ranges                                                              */
+/* ------------------------------------------------------------------ */
+
+/** `days: 0` means all time. */
+const RANGES = [
+	{ days: 1, label: "Today" },
+	{ days: 7, label: "Last 7 days" },
+	{ days: 30, label: "Last 30 days" },
+	{ days: 90, label: "Last 90 days" },
+	{ days: 365, label: "Last 12 months" },
+	{ days: 0, label: "All time" },
+] as const;
+
+const DEFAULT_RANGE = 7;
+const RANGE_KEY = "ui:rangeDays";
+
+function rangeLabel(days: number): string {
+	return RANGES.find((r) => r.days === days)?.label ?? `Last ${days} days`;
+}
+
+async function currentRange(ctx: PluginContext): Promise<number> {
+	const saved = await ctx.kv.get<number>(RANGE_KEY);
+	return typeof saved === "number" && RANGES.some((r) => r.days === saved) ? saved : DEFAULT_RANGE;
+}
+
+/* ------------------------------------------------------------------ */
 /* Small helpers                                                       */
 /* ------------------------------------------------------------------ */
 
@@ -99,35 +125,47 @@ async function bump<T extends object>(
 	}
 }
 
-/** Sum of daily counts for an entry over the last `days` days, including today. */
-async function windowCount(ctx: PluginContext, key: string, days: number): Promise<number> {
+/** Walk every daily row since `since` (inclusive), optionally for one entry. */
+async function eachDaily(
+	ctx: PluginContext,
+	since: string,
+	key: string | null,
+	visit: (row: DailyRow) => void,
+): Promise<void> {
 	const { daily } = stores(ctx);
-	const since = daysAgo(days - 1);
-	let sum = 0;
 	let cursor: string | undefined;
 	do {
 		const page = await daily.query({
-			where: { entryKey: key, day: { gte: since } },
+			where: key ? { entryKey: key, day: { gte: since } } : { day: { gte: since } },
 			limit: 100,
 			cursor,
 		});
-		for (const row of page.items) sum += row.data.count;
+		for (const row of page.items) visit(row.data);
 		cursor = page.hasMore ? page.cursor : undefined;
 	} while (cursor);
+}
+
+/** Views for one entry over the last `days` days (0 = all time, read from totals). */
+async function entryCount(ctx: PluginContext, key: string, days: number, total: number): Promise<number> {
+	if (days === 0) return total;
+	let sum = 0;
+	await eachDaily(ctx, daysAgo(days - 1), key, (r) => (sum += r.count));
 	return sum;
 }
 
-/** Site-wide sum of daily counts since a day. */
-async function siteWindow(ctx: PluginContext, since: string): Promise<number> {
-	const { daily } = stores(ctx);
+/** Site-wide views over the last `days` days. */
+async function siteCount(ctx: PluginContext, days: number): Promise<number> {
 	let sum = 0;
-	let cursor: string | undefined;
-	do {
-		const page = await daily.query({ where: { day: { gte: since } }, limit: 100, cursor });
-		for (const row of page.items) sum += row.data.count;
-		cursor = page.hasMore ? page.cursor : undefined;
-	} while (cursor);
+	await eachDaily(ctx, daysAgo(days - 1), null, (r) => (sum += r.count));
 	return sum;
+}
+
+/** Site-wide views per day for the last `days` days, zero-filled, as chart points. */
+async function siteSeries(ctx: PluginContext, days: number): Promise<[number, number][]> {
+	const byDay = new Map<string, number>();
+	for (let i = days - 1; i >= 0; i--) byDay.set(daysAgo(i), 0);
+	await eachDaily(ctx, daysAgo(days - 1), null, (r) => byDay.set(r.day, (byDay.get(r.day) ?? 0) + r.count));
+	return [...byDay.entries()].map(([day, n]) => [Date.parse(`${day}T00:00:00Z`), n]);
 }
 
 async function topEntries(ctx: PluginContext, limit: number) {
@@ -153,11 +191,18 @@ function snippet(pluginId: string): string {
 
 async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 	const { totals } = stores(ctx);
-	const [tracked, todayViews, weekViews, top] = await Promise.all([
+	const days = await currentRange(ctx);
+	const label = rangeLabel(days);
+	const retention = (await ctx.settings.get<number>("retentionDays")) ?? 90;
+	// Daily history only exists for `retention` days, so a longer range is charted over what we keep.
+	const chartDays = Math.min(days === 0 ? retention : days, retention);
+
+	const [tracked, todayViews, rangeViews, top, series] = await Promise.all([
 		totals.count(),
-		siteWindow(ctx, today()),
-		siteWindow(ctx, daysAgo(6)),
+		siteCount(ctx, 1),
+		days === 0 ? null : siteCount(ctx, days),
 		topEntries(ctx, 50),
+		chartDays > 1 ? siteSeries(ctx, chartDays) : null,
 	]);
 	const allTime = top.reduce((s, r) => s + r.data.total, 0);
 
@@ -165,8 +210,8 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 		top.map(async (r) => ({
 			title: r.data.title,
 			collection: r.data.collection,
+			range: await entryCount(ctx, r.id, days, r.data.total),
 			total: r.data.total,
-			week: await windowCount(ctx, r.id, 7),
 			last: r.data.lastViewedAt,
 			open: {
 				type: "link",
@@ -192,10 +237,20 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 	const blocks: Block[] = [
 		{ type: "header", text: "Post Views" },
 		{
+			type: "section",
+			text: `Showing ${label.toLowerCase()}.`,
+			accessory: {
+				type: "menu",
+				action_id: "set_range",
+				label: label,
+				items: RANGES.map((r) => ({ label: r.label, value: String(r.days) })),
+			},
+		},
+		{
 			type: "stats",
 			items: [
 				{ label: "Today", value: fmt(todayViews) },
-				{ label: "Last 7 days", value: fmt(weekViews) },
+				...(days === 0 || days === 1 ? [] : [{ label, value: fmt(rangeViews ?? 0) }]),
 				{ label: "All time", value: fmt(allTime) },
 				{ label: "Entries tracked", value: fmt(tracked) },
 			],
@@ -211,14 +266,33 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 		});
 	}
 
+	if (series) {
+		blocks.push({
+			type: "chart",
+			config: {
+				chart_type: "timeseries",
+				series: [{ name: "Views", data: series }],
+				style: "bar",
+				y_axis_name: "Views",
+				height: 240,
+			},
+		});
+		if (days === 0 || days > retention) {
+			blocks.push({
+				type: "context",
+				text: `Chart shows the last ${retention} days, the daily history kept by the retention setting.`,
+			});
+		}
+	}
+
 	blocks.push(
 		{
 			type: "table",
 			columns: [
 				{ key: "title", label: "Entry" },
 				{ key: "collection", label: "Collection", format: "badge" },
+				{ key: "range", label, format: "number" },
 				{ key: "total", label: "All time", format: "number" },
-				{ key: "week", label: "7 days", format: "number" },
 				{ key: "last", label: "Last viewed", format: "relative_time" },
 				{ key: "open", label: "", format: "element" },
 				{ key: "reset", label: "", format: "element" },
@@ -230,12 +304,12 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 		{
 			type: "actions",
 			elements: [
-				{ type: "button", label: "Refresh", action_id: "refresh" },
+				{ type: "button", label: "Refresh", action_id: "refresh", style: "secondary" },
 				{
 					type: "button",
 					label: "Reset all counts",
 					action_id: "reset_all",
-					style: "danger",
+					style: "secondary",
 					confirm: {
 						title: "Reset every count?",
 						text: "All totals and daily history will be deleted. This cannot be undone.",
@@ -284,23 +358,21 @@ async function popularWidget(ctx: PluginContext): Promise<BlockResponse> {
 			],
 		};
 	}
-	const [todayViews, weekViews] = await Promise.all([
-		siteWindow(ctx, today()),
-		siteWindow(ctx, daysAgo(6)),
-	]);
+	const widgetDays = Number((await ctx.settings.get<string>("widgetRange")) ?? "7") || 7;
+	const [todayViews, rangeViews] = await Promise.all([siteCount(ctx, 1), siteCount(ctx, widgetDays)]);
 	const allTime = top.reduce((s, r) => s + r.data.total, 0);
+
 	const blocks: Block[] = [
 		{
 			type: "stats",
 			items: [
 				{ label: "Today", value: fmt(todayViews) },
-				{ label: "7 days", value: fmt(weekViews) },
+				{ label: rangeLabel(widgetDays), value: fmt(rangeViews) },
 				{ label: "All time", value: fmt(allTime) },
 			],
 		},
 		{ type: "context", text: "Most read" },
 	];
-	// One row per entry: title on the left, view count on the right, like the core activity list.
 	for (const r of top) {
 		blocks.push({
 			type: "section",
@@ -334,14 +406,19 @@ async function editorPanel(ctx: PluginContext, collection: string, id: string): 
 			blocks: [{ type: "context", text: "No views recorded for this entry yet." }],
 		};
 	}
-	const [t, w] = await Promise.all([windowCount(ctx, key, 1), windowCount(ctx, key, 7)]);
+	const [d1, d7, d30] = await Promise.all([
+		entryCount(ctx, key, 1, row.total),
+		entryCount(ctx, key, 7, row.total),
+		entryCount(ctx, key, 30, row.total),
+	]);
 	return {
 		blocks: [
 			{
 				type: "stats",
 				items: [
-					{ label: "Today", value: fmt(t) },
-					{ label: "Last 7 days", value: fmt(w) },
+					{ label: "Today", value: fmt(d1) },
+					{ label: "7 days", value: fmt(d7) },
+					{ label: "30 days", value: fmt(d30) },
 					{ label: "All time", value: fmt(row.total) },
 				],
 			},
@@ -504,6 +581,11 @@ const plugin: SandboxedPlugin = {
 				const surface = routeCtx.ui?.surface;
 
 				if (i.type === "block_action") {
+					if (i.action_id === "set_range") {
+						const days = Number(i.value);
+						if (RANGES.some((r) => r.days === days)) await ctx.kv.set(RANGE_KEY, days);
+						return overviewPage(ctx);
+					}
 					if (i.action_id === "reset_all") {
 						await resetAll(ctx);
 						return { ...(await overviewPage(ctx)), toast: { type: "success", message: "All counts reset" } };
@@ -514,7 +596,7 @@ const plugin: SandboxedPlugin = {
 					}
 				}
 
-				if (surface === "dashboard-widget" || i.page === "popular") return popularWidget(ctx);
+				if (surface === "dashboard-widget" || i.page === "widget:popular") return popularWidget(ctx);
 				return overviewPage(ctx);
 			},
 		},

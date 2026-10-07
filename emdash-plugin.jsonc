@@ -51,6 +51,17 @@
 				"type": "string",
 				"default": "posts,pages"
 			},
+			"widgetRange": {
+				"label": "Dashboard widget range",
+				"description": "Which period the Popular posts widget shows beside Today and All time.",
+				"type": "select",
+				"options": [
+					{ "value": "7", "label": "Last 7 days" },
+					{ "value": "30", "label": "Last 30 days" },
+					{ "value": "90", "label": "Last 90 days" }
+				],
+				"default": "7"
+			},
 			"uniquePerDay": {
 				"label": "Count each visitor once per day",
 				"description": "Uses a one-way hash of the visitor's IP and browser. No cookies, nothing personal stored.",
