@@ -379,7 +379,7 @@ async function popularWidget(ctx: PluginContext): Promise<BlockResponse> {
 			text: `${r.data.title}  ·  ${r.data.collection}`,
 			accessory: {
 				type: "link",
-				label: `${fmt(r.data.total)} views`,
+				label: `${fmt(r.data.total)} ${r.data.total === 1 ? "view" : "views"}`,
 				target: { kind: "content", collection: r.data.collection, id: r.data.entryId },
 			},
 		});
