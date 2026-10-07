@@ -28,7 +28,7 @@ interface SeenRow {
 }
 
 /* ------------------------------------------------------------------ */
-/* Ranges                                                              */
+/* Ranges and settings                                                 */
 /* ------------------------------------------------------------------ */
 
 /** `days: 0` means all time. */
@@ -51,6 +51,45 @@ function rangeLabel(days: number): string {
 async function currentRange(ctx: PluginContext): Promise<number> {
 	const saved = await ctx.kv.get<number>(RANGE_KEY);
 	return typeof saved === "number" && RANGES.some((r) => r.days === saved) ? saved : DEFAULT_RANGE;
+}
+
+interface Settings {
+	uniquePerDay: boolean;
+	retentionDays: number;
+	widgetToday: boolean;
+	widgetPeriod: number; // 0 = do not show
+	widgetAllTime: boolean;
+	widgetListCount: number;
+	widgetListBy: "total" | "period";
+	widgetShowLink: boolean;
+}
+
+/** All settings with their defaults applied. Values come from the host's settings form. */
+async function loadSettings(ctx: PluginContext): Promise<Settings> {
+	const s = ctx.settings;
+	const bool = async (key: string, d: boolean) => {
+		const v = await s.get<boolean>(key);
+		return typeof v === "boolean" ? v : d;
+	};
+	const num = async (key: string, d: number, min: number, max: number) => {
+		const raw = await s.get<number | string>(key);
+		if (raw === null || raw === undefined || raw === "") return d;
+		const v = Number(raw);
+		return Number.isFinite(v) ? Math.min(max, Math.max(min, Math.round(v))) : d;
+	};
+	const periodRaw = (await s.get<string>("widgetPeriod")) ?? "7";
+	const period = periodRaw === "none" ? 0 : Number(periodRaw) || 7;
+	const listBy = (await s.get<string>("widgetListBy")) === "period" ? "period" : "total";
+	return {
+		uniquePerDay: await bool("uniquePerDay", true),
+		retentionDays: await num("retentionDays", 90, 7, 730),
+		widgetToday: await bool("widgetToday", true),
+		widgetPeriod: period,
+		widgetAllTime: await bool("widgetAllTime", true),
+		widgetListCount: await num("widgetListCount", 5, 0, 10),
+		widgetListBy: listBy,
+		widgetShowLink: await bool("widgetShowLink", true),
+	};
 }
 
 /* ------------------------------------------------------------------ */
@@ -86,22 +125,16 @@ function fmt(n: number): string {
 	return new Intl.NumberFormat("en-US").format(n);
 }
 
+function views(n: number): string {
+	return `${fmt(n)} ${n === 1 ? "view" : "views"}`;
+}
+
 function stores(ctx: PluginContext) {
 	return {
 		totals: ctx.storage.totals as StorageCollection<TotalRow>,
 		daily: ctx.storage.daily as StorageCollection<DailyRow>,
 		seen: ctx.storage.seen as StorageCollection<SeenRow>,
 	};
-}
-
-async function allowedCollections(ctx: PluginContext): Promise<Set<string>> {
-	const raw = (await ctx.settings.get<string>("collections")) ?? "posts,pages";
-	return new Set(
-		raw
-			.split(",")
-			.map((s) => s.trim())
-			.filter(Boolean),
-	);
 }
 
 /** Increment-or-create on a counter row. */
@@ -182,8 +215,22 @@ function snippet(pluginId: string): string {
 	return [
 		`{/* Post Views: paste once in src/layouts/Base.astro, just before </body>. */}`,
 		`{content && (`,
-		`\t<script is:inline define:vars={{ pv: { c: content.collection, i: content.id, u: "/_emdash/api/plugins/${pluginId}/hit" } }}>`,
-		`\t\tfetch(pv.u, { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ collection: pv.c, id: pv.i }) }).catch(() => {});`,
+		`\t<script`,
+		`\t\tis:inline`,
+		`\t\tdefine:vars={{`,
+		`\t\t\tpv: {`,
+		`\t\t\t\tc: content.collection,`,
+		`\t\t\t\ti: content.id,`,
+		`\t\t\t\tu: "/_emdash/api/plugins/${pluginId}/hit",`,
+		`\t\t\t},`,
+		`\t\t}}`,
+		`\t>`,
+		`\t\tfetch(pv.u, {`,
+		`\t\t\tmethod: "POST",`,
+		`\t\t\tkeepalive: true,`,
+		`\t\t\theaders: { "Content-Type": "application/json" },`,
+		`\t\t\tbody: JSON.stringify({ collection: pv.c, id: pv.i }),`,
+		`\t\t}).catch(() => {});`,
 		`\t</script>`,
 		`)}`,
 	].join("\n");
@@ -191,9 +238,10 @@ function snippet(pluginId: string): string {
 
 async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 	const { totals } = stores(ctx);
+	const settings = await loadSettings(ctx);
 	const days = await currentRange(ctx);
 	const label = rangeLabel(days);
-	const retention = (await ctx.settings.get<number>("retentionDays")) ?? 90;
+	const retention = settings.retentionDays;
 	// Daily history only exists for `retention` days, so a longer range is charted over what we keep.
 	const chartDays = Math.min(days === 0 ? retention : days, retention);
 
@@ -337,7 +385,8 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 }
 
 async function popularWidget(ctx: PluginContext): Promise<BlockResponse> {
-	const top = await topEntries(ctx, 5);
+	const s = await loadSettings(ctx);
+	const top = await topEntries(ctx, 50);
 	if (top.length === 0) {
 		return {
 			blocks: [
@@ -358,42 +407,56 @@ async function popularWidget(ctx: PluginContext): Promise<BlockResponse> {
 			],
 		};
 	}
-	const widgetDays = Number((await ctx.settings.get<string>("widgetRange")) ?? "7") || 7;
-	const [todayViews, rangeViews] = await Promise.all([siteCount(ctx, 1), siteCount(ctx, widgetDays)]);
-	const allTime = top.reduce((s, r) => s + r.data.total, 0);
 
-	const blocks: Block[] = [
-		{
-			type: "stats",
-			items: [
-				{ label: "Today", value: fmt(todayViews) },
-				{ label: rangeLabel(widgetDays), value: fmt(rangeViews) },
-				{ label: "All time", value: fmt(allTime) },
-			],
-		},
-		{ type: "context", text: "Most read" },
-	];
-	for (const r of top) {
+	const blocks: Block[] = [];
+
+	// Stat cards, each one switchable in the plugin's settings.
+	const items: { label: string; value: string }[] = [];
+	if (s.widgetToday) items.push({ label: "Today", value: fmt(await siteCount(ctx, 1)) });
+	if (s.widgetPeriod > 0) items.push({ label: rangeLabel(s.widgetPeriod), value: fmt(await siteCount(ctx, s.widgetPeriod)) });
+	if (s.widgetAllTime) items.push({ label: "All time", value: fmt(top.reduce((a, r) => a + r.data.total, 0)) });
+	if (items.length > 0) blocks.push({ type: "stats", items });
+
+	// Most-read list, ranked by all-time views or by the chosen period.
+	if (s.widgetListCount > 0) {
+		const periodDays = s.widgetListBy === "period" && s.widgetPeriod > 0 ? s.widgetPeriod : 0;
+		const ranked = await Promise.all(
+			top.map(async (r) => ({ row: r, n: await entryCount(ctx, r.id, periodDays, r.data.total) })),
+		);
+		ranked.sort((a, b) => b.n - a.n);
+		const listed = ranked.filter((x) => x.n > 0).slice(0, s.widgetListCount);
+		blocks.push({
+			type: "context",
+			text: periodDays ? `Most read, ${rangeLabel(periodDays).toLowerCase()}` : "Most read",
+		});
+		for (const { row, n } of listed) {
+			blocks.push({
+				type: "section",
+				text: `${row.data.title}  ·  ${row.data.collection}`,
+				accessory: {
+					type: "link",
+					label: views(n),
+					target: { kind: "content", collection: row.data.collection, id: row.data.entryId },
+				},
+			});
+		}
+		if (listed.length === 0) blocks.push({ type: "context", text: "No views in this period yet." });
+	}
+
+	if (s.widgetShowLink) {
 		blocks.push({
 			type: "section",
-			text: `${r.data.title}  ·  ${r.data.collection}`,
+			text: "",
 			accessory: {
 				type: "link",
-				label: `${fmt(r.data.total)} ${r.data.total === 1 ? "view" : "views"}`,
-				target: { kind: "content", collection: r.data.collection, id: r.data.entryId },
+				label: "All entries",
+				target: { kind: "plugin-page", path: "/overview" },
+				appearance: "secondary",
 			},
 		});
 	}
-	blocks.push({
-		type: "section",
-		text: "",
-		accessory: {
-			type: "link",
-			label: "All entries",
-			target: { kind: "plugin-page", path: "/overview" },
-			appearance: "secondary",
-		},
-	});
+
+	if (blocks.length === 0) blocks.push({ type: "context", text: "Everything is hidden in the Post Views settings." });
 	return { blocks };
 }
 
@@ -414,11 +477,11 @@ async function editorPanel(ctx: PluginContext, collection: string, id: string): 
 	return {
 		blocks: [
 			{
-				type: "stats",
-				items: [
+				type: "fields",
+				fields: [
 					{ label: "Today", value: fmt(d1) },
-					{ label: "7 days", value: fmt(d7) },
-					{ label: "30 days", value: fmt(d30) },
+					{ label: "Last 7 days", value: fmt(d7) },
+					{ label: "Last 30 days", value: fmt(d30) },
 					{ label: "All time", value: fmt(row.total) },
 				],
 			},
@@ -474,9 +537,9 @@ const plugin: SandboxedPlugin = {
 		cron: async (event, ctx) => {
 			if (event.name !== "cleanup") return;
 			const { daily, seen } = stores(ctx);
-			const keep = (await ctx.settings.get<number>("retentionDays")) ?? 90;
+			const { retentionDays } = await loadSettings(ctx);
 			const dropSeen = await purge(seen, { day: { lt: today() } });
-			const dropDaily = await purge(daily, { day: { lt: daysAgo(keep) } });
+			const dropDaily = await purge(daily, { day: { lt: daysAgo(retentionDays) } });
 			ctx.log.info("Post Views cleanup", { dropSeen, dropDaily });
 		},
 	},
@@ -493,17 +556,15 @@ const plugin: SandboxedPlugin = {
 				const id = typeof input.id === "string" ? input.id : "";
 				if (!ID_RE.test(collection) || !ID_RE.test(id)) return { ok: false, error: "INVALID_INPUT" };
 
-				const allowed = await allowedCollections(ctx);
-				if (!allowed.has(collection)) return { ok: false, error: "COLLECTION_NOT_COUNTED" };
-
-				const entry = await ctx.content!.get(collection, id);
+				// Unknown collections make the host throw; treat that the same as an unknown entry.
+				const entry = await ctx.content!.get(collection, id).catch(() => null);
 				if (!entry || entry.status !== "published") return { ok: false, error: "NOT_PUBLISHED" };
 
 				const day = today();
 				const key = entryKey(collection, id);
-				const unique = (await ctx.settings.get<boolean>("uniquePerDay")) ?? true;
+				const { uniquePerDay } = await loadSettings(ctx);
 
-				if (unique) {
+				if (uniquePerDay) {
 					const meta = (routeCtx.requestMeta ?? {}) as { ip?: string | null; userAgent?: string | null };
 					const fingerprint = await sha256Hex(`${meta.ip ?? "noip"}|${meta.userAgent ?? "noua"}|${key}|${day}`);
 					const { seen } = stores(ctx);

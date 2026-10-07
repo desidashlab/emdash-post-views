@@ -51,11 +51,20 @@ Both routes are public and cached for a short time, so they are safe to call fro
 
 ## Settings
 
+Open **Plugins**, then **Settings** next to Post Views.
+
 | Setting | Default | What it does |
 |---|---|---|
-| Counted collections | `posts,pages` | Comma-separated collection slugs to count. |
 | Count each visitor once per day | on | Turn off to count every page load. |
 | Keep daily history for (days) | 90 | Per-day rows older than this are removed nightly. All-time totals are kept forever. |
+| Dashboard: show Today | on | Today's views card on the dashboard widget. |
+| Dashboard: show a period | Last 7 days | A second card for the last 7, 30, or 90 days, or none. |
+| Dashboard: show All time | on | The all-time card. |
+| Dashboard: most-read entries to list | 5 | How many entries to list, 0 hides the list. |
+| Dashboard: rank most read by | All-time views | Rank by all-time views or by views in the chosen period. |
+| Dashboard: show the All entries button | on | Link to the full Post Views page. |
+
+There is nothing to configure about which content is counted. Any published entry whose page carries the snippet is counted; the theme decides which pages do.
 
 ## Privacy
 

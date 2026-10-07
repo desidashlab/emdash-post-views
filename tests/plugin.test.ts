@@ -76,14 +76,11 @@ describe("hit route", () => {
 		expect(total?.total).toBe(2);
 	});
 
-	it("refuses drafts, unknown entries, uncounted collections, and bad input", async () => {
+	it("refuses drafts, unknown entries, unknown collections, and bad input", async () => {
 		expect(await hit({ collection: "posts", id: "post-draft" })).toEqual({ ok: false, error: "NOT_PUBLISHED" });
 		expect(await hit({ collection: "posts", id: "nope" })).toEqual({ ok: false, error: "NOT_PUBLISHED" });
 		expect(await hit({ collection: "posts" })).toEqual({ ok: false, error: "INVALID_INPUT" });
-		expect(await hit({ collection: "secrets", id: "post-live" })).toEqual({
-			ok: false,
-			error: "COLLECTION_NOT_COUNTED",
-		});
+		expect(await hit({ collection: "secrets", id: "post-live" })).toEqual({ ok: false, error: "NOT_PUBLISHED" });
 		expect(await host.inspect.storage.list("totals")).toHaveLength(0);
 	});
 });
@@ -151,13 +148,28 @@ describe("admin surfaces", () => {
 		expect(types.filter((t) => t === "section").length).toBeGreaterThanOrEqual(2);
 	});
 
+	it("lets the owner choose what the widget shows", async () => {
+		await hit(POST);
+		await host.fixtures.plugin.setting("widgetToday", false);
+		await host.fixtures.plugin.setting("widgetPeriod", "30");
+		await host.fixtures.plugin.setting("widgetAllTime", false);
+		await host.fixtures.plugin.setting("widgetListCount", 0);
+		await host.fixtures.plugin.setting("widgetShowLink", false);
+
+		const widget = await host.admin.loadWidget("popular");
+		expect(widget.blocks.map((b) => b.type)).toEqual(["stats"]);
+		const stats = widget.blocks[0];
+		const labels = stats && "items" in stats ? stats.items.map((s) => s.label) : [];
+		expect(labels).toEqual(["Last 30 days"]);
+	});
+
 	it("shows per-entry numbers in the editor panel", async () => {
 		const before = await host.admin.loadEditorPanel("views", "posts", "post-live");
 		expect(before.blocks[0]?.type).toBe("context");
 
 		await hit(POST);
 		const after = await host.admin.loadEditorPanel("views", "posts", "post-live");
-		expect(after.blocks[0]?.type).toBe("stats");
+		expect(after.blocks[0]?.type).toBe("fields");
 	});
 
 	it("resets a single entry and then everything", async () => {

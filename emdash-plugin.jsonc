@@ -9,6 +9,25 @@
 	"keywords": ["views", "analytics", "popular posts", "statistics", "privacy"],
 	"repo": "https://github.com/desidashlab/emdash-post-views",
 
+	// Registry listing: long-form sections and media. Paths are relative to this file.
+	"sections": {
+		"installation": { "file": "docs/installation.md" },
+		"faq": { "file": "docs/faq.md" },
+		"changelog": { "file": "docs/changelog.md" }
+	},
+	"release": {
+		"artifacts": {
+			"icon": { "file": "assets/icon.png" },
+			"banner": { "file": "assets/banner.png" },
+			"screenshots": [
+				{ "file": "assets/screenshot-overview.jpg" },
+				{ "file": "assets/screenshot-dashboard.jpg" },
+				{ "file": "assets/screenshot-editor.jpg" },
+				{ "file": "assets/screenshot-settings.jpg" }
+			]
+		}
+	},
+
 	"license": "MIT",
 	"author": { "name": "DesiDash Lab" },
 	"security": { "email": "liquifysolutionsdev1@gmail.com" },
@@ -45,23 +64,6 @@
 			}
 		],
 		"settingsSchema": {
-			"collections": {
-				"label": "Counted collections",
-				"description": "Comma-separated collection slugs whose entries are counted.",
-				"type": "string",
-				"default": "posts,pages"
-			},
-			"widgetRange": {
-				"label": "Dashboard widget range",
-				"description": "Which period the Popular posts widget shows beside Today and All time.",
-				"type": "select",
-				"options": [
-					{ "value": "7", "label": "Last 7 days" },
-					{ "value": "30", "label": "Last 30 days" },
-					{ "value": "90", "label": "Last 90 days" }
-				],
-				"default": "7"
-			},
 			"uniquePerDay": {
 				"label": "Count each visitor once per day",
 				"description": "Uses a one-way hash of the visitor's IP and browser. No cookies, nothing personal stored.",
@@ -70,11 +72,54 @@
 			},
 			"retentionDays": {
 				"label": "Keep daily history for (days)",
-				"description": "Totals are kept forever. Per-day rows older than this are removed nightly.",
+				"description": "Totals are kept forever. Per-day rows older than this are removed nightly. Charts and ranges can only go back this far.",
 				"type": "number",
 				"default": 90,
 				"min": 7,
 				"max": 730
+			},
+			"widgetToday": {
+				"label": "Dashboard: show Today",
+				"type": "boolean",
+				"default": true
+			},
+			"widgetPeriod": {
+				"label": "Dashboard: show a period",
+				"type": "select",
+				"options": [
+					{ "value": "none", "label": "Do not show" },
+					{ "value": "7", "label": "Last 7 days" },
+					{ "value": "30", "label": "Last 30 days" },
+					{ "value": "90", "label": "Last 90 days" }
+				],
+				"default": "7"
+			},
+			"widgetAllTime": {
+				"label": "Dashboard: show All time",
+				"type": "boolean",
+				"default": true
+			},
+			"widgetListCount": {
+				"label": "Dashboard: most-read entries to list",
+				"description": "Set to 0 to hide the list.",
+				"type": "number",
+				"default": 5,
+				"min": 0,
+				"max": 10
+			},
+			"widgetListBy": {
+				"label": "Dashboard: rank most read by",
+				"type": "select",
+				"options": [
+					{ "value": "total", "label": "All-time views" },
+					{ "value": "period", "label": "Views in the chosen period" }
+				],
+				"default": "total"
+			},
+			"widgetShowLink": {
+				"label": "Dashboard: show the All entries button",
+				"type": "boolean",
+				"default": true
 			}
 		}
 	}
