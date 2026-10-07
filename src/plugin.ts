@@ -163,15 +163,16 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 
 	const rows = await Promise.all(
 		top.map(async (r) => ({
-			title: {
-				type: "link",
-				label: r.data.title,
-				target: { kind: "content", collection: r.data.collection, id: r.data.entryId },
-			},
+			title: r.data.title,
 			collection: r.data.collection,
 			total: r.data.total,
 			week: await windowCount(ctx, r.id, 7),
 			last: r.data.lastViewedAt,
+			open: {
+				type: "link",
+				label: "Open",
+				target: { kind: "content", collection: r.data.collection, id: r.data.entryId },
+			},
 			reset: {
 				type: "button",
 				label: "Reset",
@@ -214,11 +215,12 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 		{
 			type: "table",
 			columns: [
-				{ key: "title", label: "Entry", format: "element" },
+				{ key: "title", label: "Entry" },
 				{ key: "collection", label: "Collection", format: "badge" },
 				{ key: "total", label: "All time", format: "number" },
 				{ key: "week", label: "7 days", format: "number" },
 				{ key: "last", label: "Last viewed", format: "relative_time" },
+				{ key: "open", label: "", format: "element" },
 				{ key: "reset", label: "", format: "element" },
 			],
 			rows,
@@ -286,33 +288,41 @@ async function popularWidget(ctx: PluginContext): Promise<BlockResponse> {
 		siteWindow(ctx, today()),
 		siteWindow(ctx, daysAgo(6)),
 	]);
-	return {
-		blocks: [
-			{
-				type: "stats",
-				items: [
-					{ label: "Today", value: fmt(todayViews) },
-					{ label: "7 days", value: fmt(weekViews) },
-				],
+	const allTime = top.reduce((s, r) => s + r.data.total, 0);
+	const blocks: Block[] = [
+		{
+			type: "stats",
+			items: [
+				{ label: "Today", value: fmt(todayViews) },
+				{ label: "7 days", value: fmt(weekViews) },
+				{ label: "All time", value: fmt(allTime) },
+			],
+		},
+		{ type: "context", text: "Most read" },
+	];
+	// One row per entry: title on the left, view count on the right, like the core activity list.
+	for (const r of top) {
+		blocks.push({
+			type: "section",
+			text: `${r.data.title}  ·  ${r.data.collection}`,
+			accessory: {
+				type: "link",
+				label: `${fmt(r.data.total)} views`,
+				target: { kind: "content", collection: r.data.collection, id: r.data.entryId },
 			},
-			{
-				type: "table",
-				columns: [
-					{ key: "title", label: "Most read", format: "element" },
-					{ key: "total", label: "Views", format: "number" },
-				],
-				rows: top.map((r) => ({
-					title: {
-						type: "link",
-						label: r.data.title,
-						target: { kind: "content", collection: r.data.collection, id: r.data.entryId },
-					},
-					total: r.data.total,
-				})),
-				page_action_id: "browse",
-			},
-		],
-	};
+		});
+	}
+	blocks.push({
+		type: "section",
+		text: "",
+		accessory: {
+			type: "link",
+			label: "All entries",
+			target: { kind: "plugin-page", path: "/overview" },
+			appearance: "secondary",
+		},
+	});
+	return { blocks };
 }
 
 async function editorPanel(ctx: PluginContext, collection: string, id: string): Promise<BlockResponse> {

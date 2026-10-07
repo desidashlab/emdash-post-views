@@ -131,7 +131,9 @@ describe("admin surfaces", () => {
 
 		await hit(POST);
 		const widget = await host.admin.loadWidget("popular");
-		expect(widget.blocks.map((b) => b.type)).toEqual(["stats", "table"]);
+		const types = widget.blocks.map((b) => b.type);
+		expect(types[0]).toBe("stats");
+		expect(types.filter((t) => t === "section").length).toBeGreaterThanOrEqual(2);
 	});
 
 	it("shows per-entry numbers in the editor panel", async () => {
