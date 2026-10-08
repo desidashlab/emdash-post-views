@@ -220,7 +220,7 @@ describe("sources and trends", () => {
 		expect(srcRows[0]?.share).toBe("50%");
 	});
 
-	it("shows an arrow against yesterday on the Today card", async () => {
+	it("shows yesterday under Today and an arrow on the week card", async () => {
 		const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
 		await host.fixtures.plugin.storage("daily", `posts:post-live:${yesterday}`, {
 			entryKey: "posts:post-live",
@@ -237,7 +237,12 @@ describe("sources and trends", () => {
 		const stats = widget.blocks[0];
 		const today = stats && "items" in stats ? stats.items[0] : undefined;
 		expect(today?.label).toBe("Today");
-		expect(today?.trend).toBe("down");
-		expect(today?.description).toBe("-50% vs yesterday");
+		expect(today?.trend).toBeUndefined();
+		expect(today?.description).toBe("Yesterday: 4");
+
+		const week = stats && "items" in stats ? stats.items[1] : undefined;
+		expect(week?.label).toBe("Last 7 days");
+		expect(week?.trend).toBe("up");
+		expect(week?.description).toBe("Previous 7 days: 0");
 	});
 });

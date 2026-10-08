@@ -1,6 +1,6 @@
 ## 0.2.0
 
-- Arrows on the number cards: today against yesterday, and the chosen period against the one before.
+- Yesterday's number under Today, and an arrow with the previous period's number under each period card.
 - Where readers came from: the sites that sent readers, with a share for each. Site name only, never the full address.
 - Simpler everywhere. The Dashboard shows today, last 7 days, all time, and the three most-read entries.
 - One setting only: count each visitor once per day. The chart and periods go back a year, totals are kept forever.

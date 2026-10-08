@@ -211,25 +211,23 @@ async function siteWindow(ctx: PluginContext, fromDaysAgo: number, toDaysAgo: nu
 	return sum;
 }
 
-/** Stats-card trend against the previous period of the same length. */
-function trendOf(current: number, previous: number, vs: string): { trend: "up" | "down" | "neutral"; description: string } {
-	if (previous === 0 && current === 0) return { trend: "neutral", description: `Same as ${vs}` };
-	if (previous === 0) return { trend: "up", description: `Nothing ${vs}` };
-	const pct = Math.round(((current - previous) / previous) * 100);
-	if (pct === 0) return { trend: "neutral", description: `Same as ${vs}` };
-	return { trend: pct > 0 ? "up" : "down", description: `${pct > 0 ? "+" : ""}${pct}% vs ${vs}` };
+/** Period card: a fair comparison, so it gets an arrow and the previous number in plain words. */
+function trendOf(current: number, previous: number, vs: string): { trend?: "up" | "down" | "neutral"; description: string } {
+	const description = `${vs}: ${fmt(previous)}`;
+	if (current === previous) return { trend: "neutral", description };
+	return { trend: current > previous ? "up" : "down", description };
 }
 
-/** Today's card with its arrow against yesterday. */
+/** Today's card. A part of a day against a whole day is not a fair comparison, so no arrow, just yesterday's number. */
 async function todayCard(ctx: PluginContext) {
 	const [t, y] = await Promise.all([siteCount(ctx, 1), siteWindow(ctx, 1, 1)]);
-	return { label: "Today", value: fmt(t), ...trendOf(t, y, "yesterday") };
+	return { label: "Today", value: fmt(t), description: `Yesterday: ${fmt(y)}` };
 }
 
 /** A period card with its arrow against the previous period of the same length. */
 async function periodCard(ctx: PluginContext, days: number, label: string) {
 	const [cur, prev] = await Promise.all([siteCount(ctx, days), siteWindow(ctx, days * 2 - 1, days)]);
-	return { label, value: fmt(cur), ...trendOf(cur, prev, `previous ${days} days`) };
+	return { label, value: fmt(cur), ...trendOf(cur, prev, `Previous ${days} days`) };
 }
 
 /** Referring site for a hit: host only, "Direct" when absent or from this site. */

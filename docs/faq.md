@@ -18,9 +18,9 @@ Three places. The Dashboard shows today, the last 7 days, all time, and your thr
 
 Yes. The Post Views page lists the sites that sent readers, for example google.com or facebook.com, with a share for each. Visits typed in directly or from bookmarks show as Direct. Only the site name is kept, never the full address.
 
-## What do the small arrows mean?
+## What do the small arrows and lines under the numbers mean?
 
-Today is compared with yesterday, and the chosen period with the one before it. Up means more views, down means fewer.
+Under Today you see yesterday's number, for a quick comparison. Under a period such as Last 7 days you see the number for the period before it, with an arrow: up means more views, down means fewer.
 
 ## Why do Today and All time show the same number?
 
