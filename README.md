@@ -41,7 +41,7 @@ Open **Plugins**, then **Settings** next to Post Views.
 | Setting | Default |
 |---|---|
 | Count each visitor once per day | on |
-| Keep day-by-day history for | 3 months. All-time totals are always kept. |
+| Chart and periods go back | 3 months. All-time totals are always kept. |
 
 ## Privacy
 

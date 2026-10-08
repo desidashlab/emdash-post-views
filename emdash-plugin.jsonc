@@ -75,8 +75,8 @@
 				"default": true
 			},
 			"keepHistory": {
-				"label": "Keep day-by-day history for",
-				"description": "All-time totals are always kept.",
+				"label": "Chart and periods go back",
+				"description": "How far back the chart and the period picker can look. All-time totals are always kept.",
 				"type": "select",
 				"options": [
 					{ "value": "3", "label": "3 months" },

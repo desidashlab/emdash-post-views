@@ -382,7 +382,7 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 		if (days === 0) {
 			blocks.push({
 				type: "context",
-				text: `All-time totals are exact. The chart and the sources cover the last ${Math.round(retention / 30)} months, the day-by-day history you keep. Change that in the plugin settings.`,
+				text: `All-time totals are exact. The chart and the sources cover the last ${Math.round(retention / 30)} months, as set by "Chart and periods go back" in the plugin settings.`,
 			});
 		}
 	}
