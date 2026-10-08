@@ -308,7 +308,8 @@ describe("sources and trends", () => {
 
 		const week = stats && "items" in stats ? stats.items[1] : undefined;
 		expect(week?.label).toBe("Last 7 days");
-		expect(week?.trend).toBe("up");
-		expect(week?.description).toBe("Previous 7 days: 0");
+		// Nothing in the week before, so no arrow and no comparison line.
+		expect(week?.trend).toBeUndefined();
+		expect(week?.description).toBeUndefined();
 	});
 });

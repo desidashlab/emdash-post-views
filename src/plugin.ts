@@ -227,8 +227,19 @@ async function siteWindow(ctx: PluginContext, fromDaysAgo: number, toDaysAgo: nu
 	return sum;
 }
 
-/** Period card: a fair comparison, so it gets an arrow and the previous number in plain words. */
-function trendOf(current: number, previous: number, vs: string): { trend?: "up" | "down" | "neutral"; description: string } {
+/** Plain-words name for the period before the chosen one. */
+function beforeLabel(days: number): string {
+	if (days === 7) return "Week before";
+	if (days === 30) return "Month before";
+	if (days === 90) return "3 months before";
+	if (days === 180) return "6 months before";
+	if (days === 365) return "Year before";
+	return `${days} days before`;
+}
+
+/** A fair comparison gets an arrow and the earlier number. With no earlier data, say nothing. */
+function trendOf(current: number, previous: number, vs: string): { trend?: "up" | "down" | "neutral"; description?: string } {
+	if (previous === 0) return {};
 	const description = `${vs}: ${fmt(previous)}`;
 	if (current === previous) return { trend: "neutral", description };
 	return { trend: current > previous ? "up" : "down", description };
@@ -237,13 +248,13 @@ function trendOf(current: number, previous: number, vs: string): { trend?: "up" 
 /** Today's card. A part of a day against a whole day is not a fair comparison, so no arrow, just yesterday's number. */
 async function todayCard(ctx: PluginContext) {
 	const [t, y] = await Promise.all([siteCount(ctx, 1), siteWindow(ctx, 1, 1)]);
-	return { label: "Today", value: fmt(t), description: `Yesterday: ${fmt(y)}` };
+	return y > 0 ? { label: "Today", value: fmt(t), description: `Yesterday: ${fmt(y)}` } : { label: "Today", value: fmt(t) };
 }
 
-/** A period card with its arrow against the previous period of the same length. */
+/** A period card with its arrow against the period before it. */
 async function periodCard(ctx: PluginContext, days: number, label: string) {
 	const [cur, prev] = await Promise.all([siteCount(ctx, days), siteWindow(ctx, days * 2 - 1, days)]);
-	return { label, value: fmt(cur), ...trendOf(cur, prev, `Previous ${days} days`) };
+	return { label, value: fmt(cur), ...trendOf(cur, prev, beforeLabel(days)) };
 }
 
 /** Referring site for a hit: host only, "Direct" when absent or from this site. */
