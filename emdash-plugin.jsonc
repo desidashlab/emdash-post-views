@@ -21,9 +21,9 @@
 			"banner": { "file": "assets/banner.png" },
 			"screenshots": [
 				{ "file": "assets/screenshot-overview.jpg" },
+				{ "file": "assets/screenshot-sources.jpg" },
 				{ "file": "assets/screenshot-dashboard.jpg" },
-				{ "file": "assets/screenshot-editor.jpg" },
-				{ "file": "assets/screenshot-settings.jpg" }
+				{ "file": "assets/screenshot-editor.jpg" }
 			]
 		}
 	},
