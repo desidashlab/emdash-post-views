@@ -1,3 +1,7 @@
+## 0.2.2
+
+- Banner redrawn in the registry's 3:1 shape so link previews show it whole. No changes to the plugin itself.
+
 ## 0.2.1
 
 - New banner and a 7-day screenshot in the listing. No changes to the plugin itself.
