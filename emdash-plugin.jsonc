@@ -49,6 +49,10 @@
 		// Hashed visitor+entry+day, so one visitor counts once a day.
 		"seen": {
 			"indexes": ["day"]
+		},
+		// Views per referring site per day. Host name only, never the full address.
+		"sources": {
+			"indexes": ["day", "source"]
 		}
 	},
 

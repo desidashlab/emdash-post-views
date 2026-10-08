@@ -27,6 +27,12 @@ interface SeenRow {
 	day: string;
 }
 
+interface SourceRow {
+	source: string; // referring site, e.g. "google.com", or "Direct"
+	day: string;
+	count: number;
+}
+
 /* ------------------------------------------------------------------ */
 /* Ranges and settings                                                 */
 /* ------------------------------------------------------------------ */
@@ -111,6 +117,7 @@ function stores(ctx: PluginContext) {
 		totals: ctx.storage.totals as StorageCollection<TotalRow>,
 		daily: ctx.storage.daily as StorageCollection<DailyRow>,
 		seen: ctx.storage.seen as StorageCollection<SeenRow>,
+		sources: ctx.storage.sources as StorageCollection<SourceRow>,
 	};
 }
 
@@ -178,6 +185,77 @@ async function siteSeries(ctx: PluginContext, days: number): Promise<[number, nu
 	return [...byDay.entries()].map(([day, n]) => [Date.parse(`${day}T00:00:00Z`), n]);
 }
 
+/** Site-wide views between two day offsets, inclusive: fromDaysAgo >= toDaysAgo. */
+async function siteWindow(ctx: PluginContext, fromDaysAgo: number, toDaysAgo: number): Promise<number> {
+	const until = daysAgo(toDaysAgo);
+	let sum = 0;
+	await eachDaily(ctx, daysAgo(fromDaysAgo), null, (r) => {
+		if (r.day <= until) sum += r.count;
+	});
+	return sum;
+}
+
+/** Stats-card trend against the previous period of the same length. */
+function trendOf(current: number, previous: number, vs: string): { trend: "up" | "down" | "neutral"; description: string } {
+	if (previous === 0 && current === 0) return { trend: "neutral", description: `Same as ${vs}` };
+	if (previous === 0) return { trend: "up", description: `Nothing ${vs}` };
+	const pct = Math.round(((current - previous) / previous) * 100);
+	if (pct === 0) return { trend: "neutral", description: `Same as ${vs}` };
+	return { trend: pct > 0 ? "up" : "down", description: `${pct > 0 ? "+" : ""}${pct}% vs ${vs}` };
+}
+
+/** Today's card with its arrow against yesterday. */
+async function todayCard(ctx: PluginContext) {
+	const [t, y] = await Promise.all([siteCount(ctx, 1), siteWindow(ctx, 1, 1)]);
+	return { label: "Today", value: fmt(t), ...trendOf(t, y, "yesterday") };
+}
+
+/** A period card with its arrow against the previous period of the same length. */
+async function periodCard(ctx: PluginContext, days: number, label: string) {
+	const [cur, prev] = await Promise.all([siteCount(ctx, days), siteWindow(ctx, days * 2 - 1, days)]);
+	return { label, value: fmt(cur), ...trendOf(cur, prev, `previous ${days} days`) };
+}
+
+/** Referring site for a hit: host only, "Direct" when absent or from this site. */
+function sourceOf(referer: string | null | undefined, siteUrl: string): string {
+	if (!referer) return "Direct";
+	const strip = (h: string) => h.toLowerCase().replace(/^www\./, "");
+	try {
+		const host = strip(new URL(referer).hostname);
+		let own = "";
+		try {
+			own = strip(new URL(siteUrl).hostname);
+		} catch {
+			own = "";
+		}
+		if (!host || host === own || host === "localhost" || host === "127.0.0.1") return "Direct";
+		return host.slice(0, 120);
+	} catch {
+		return "Direct";
+	}
+}
+
+/** Views by source over the last `days` days (0 = all kept history). */
+async function topSources(ctx: PluginContext, days: number, retention: number) {
+	const { sources } = stores(ctx);
+	const since = daysAgo((days === 0 ? retention : Math.min(days, retention)) - 1);
+	const byHost = new Map<string, number>();
+	let cursor: string | undefined;
+	do {
+		const page = await sources.query({ where: { day: { gte: since } }, limit: 100, cursor });
+		for (const row of page.items) byHost.set(row.data.source, (byHost.get(row.data.source) ?? 0) + row.data.count);
+		cursor = page.hasMore ? page.cursor : undefined;
+	} while (cursor);
+	const total = [...byHost.values()].reduce((a, b) => a + b, 0);
+	return {
+		total,
+		items: [...byHost.entries()]
+			.sort((a, b) => b[1] - a[1])
+			.slice(0, 10)
+			.map(([source, n]) => ({ source, views: n, share: total ? `${Math.round((n / total) * 100)}%` : "0%" })),
+	};
+}
+
 async function topEntries(ctx: PluginContext, limit: number) {
 	const { totals } = stores(ctx);
 	const page = await totals.query({ orderBy: { total: "desc" }, limit });
@@ -221,12 +299,13 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 	const retention = settings.retentionDays;
 	const chartDays = Math.min(days === 0 ? retention : days, retention);
 
-	const [tracked, todayViews, rangeViews, top, series] = await Promise.all([
+	const [tracked, today_, rangeCard, top, series, sources] = await Promise.all([
 		totals.count(),
-		siteCount(ctx, 1),
-		days === 0 ? null : siteCount(ctx, days),
+		todayCard(ctx),
+		days === 0 || days === 1 ? null : periodCard(ctx, days, label),
 		topEntries(ctx, 50),
 		chartDays > 1 ? siteSeries(ctx, chartDays) : null,
+		topSources(ctx, days, retention),
 	]);
 	const allTime = top.reduce((s, r) => s + r.data.total, 0);
 
@@ -279,11 +358,7 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 		},
 		{
 			type: "stats",
-			items: [
-				{ label: "Today", value: fmt(todayViews) },
-				...(days === 0 || days === 1 ? [] : [{ label, value: fmt(rangeViews ?? 0) }]),
-				{ label: "All time", value: fmt(allTime) },
-			],
+			items: [today_, ...(rangeCard ? [rangeCard] : []), { label: "All time", value: fmt(allTime) }],
 		},
 	);
 
@@ -313,6 +388,18 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 			rows,
 			page_action_id: "browse",
 			empty_text: "Nothing counted yet.",
+		},
+		{ type: "header", text: "Where readers came from" },
+		{
+			type: "table",
+			columns: [
+				{ key: "source", label: "Source" },
+				{ key: "views", label: "Views", format: "number" },
+				{ key: "share", label: "Share" },
+			],
+			rows: sources.items,
+			page_action_id: "browse_sources",
+			empty_text: "No sources recorded yet.",
 		},
 		{
 			type: "actions",
@@ -360,17 +447,10 @@ async function popularWidget(ctx: PluginContext): Promise<BlockResponse> {
 			],
 		};
 	}
-	const [todayViews, weekViews] = await Promise.all([siteCount(ctx, 1), siteCount(ctx, 7)]);
-	const allTime = (await topEntries(ctx, 100)).reduce((s, r) => s + r.data.total, 0);
+	const [t, w, all] = await Promise.all([todayCard(ctx), periodCard(ctx, 7, "Last 7 days"), topEntries(ctx, 100)]);
+	const allTime = all.reduce((s, r) => s + r.data.total, 0);
 	const blocks: Block[] = [
-		{
-			type: "stats",
-			items: [
-				{ label: "Today", value: fmt(todayViews) },
-				{ label: "Last 7 days", value: fmt(weekViews) },
-				{ label: "All time", value: fmt(allTime) },
-			],
-		},
+		{ type: "stats", items: [t, w, { label: "All time", value: fmt(allTime) }] },
 		{ type: "context", text: "Most read" },
 	];
 	for (const r of top) {
@@ -442,10 +522,11 @@ async function purge<T>(col: StorageCollection<T>, where: Record<string, unknown
 }
 
 async function resetAll(ctx: PluginContext): Promise<void> {
-	const { totals, daily, seen } = stores(ctx);
+	const { totals, daily, seen, sources } = stores(ctx);
 	await purge(totals, {});
 	await purge(daily, {});
 	await purge(seen, {});
+	await purge(sources, {});
 }
 
 /* ------------------------------------------------------------------ */
@@ -471,7 +552,8 @@ const plugin: SandboxedPlugin = {
 			const { retentionDays } = await loadSettings(ctx);
 			const dropSeen = await purge(seen, { day: { lt: today() } });
 			const dropDaily = await purge(daily, { day: { lt: daysAgo(retentionDays) } });
-			ctx.log.info("Post Views cleanup", { dropSeen, dropDaily });
+			const dropSources = await purge(stores(ctx).sources, { day: { lt: daysAgo(retentionDays) } });
+			ctx.log.info("Post Views cleanup", { dropSeen, dropDaily, dropSources });
 		},
 	},
 
@@ -520,6 +602,9 @@ const plugin: SandboxedPlugin = {
 					day,
 					count: 1,
 				}));
+				const refMeta = (routeCtx.requestMeta ?? {}) as { referer?: string | null };
+				const source = sourceOf(refMeta.referer, ctx.site.url);
+				await bump<SourceRow>(stores(ctx).sources, `${source}:${day}`, "count", () => ({ source, day, count: 1 }));
 				return { ok: true, counted: true };
 			},
 		},

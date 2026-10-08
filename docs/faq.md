@@ -14,6 +14,14 @@ Both. Anything your theme shows as a content page is counted.
 
 Three places. The Dashboard shows today, the last 7 days, all time, and your three most-read entries. The Post Views page shows the full list, a chart, and lets you pick a period. The editor shows that entry's views in the sidebar.
 
+## Can I see where readers come from?
+
+Yes. The Post Views page lists the sites that sent readers, for example google.com or facebook.com, with a share for each. Visits typed in directly or from bookmarks show as Direct. Only the site name is kept, never the full address.
+
+## What do the small arrows mean?
+
+Today is compared with yesterday, and the chosen period with the one before it. Up means more views, down means fewer.
+
 ## Why do Today and All time show the same number?
 
 Because you installed it today. The history builds from here.

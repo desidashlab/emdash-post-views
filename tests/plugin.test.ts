@@ -200,3 +200,41 @@ describe("maintenance", () => {
 		expect(await host.inspect.storage.list("totals")).toHaveLength(1);
 	});
 });
+
+describe("sources and trends", () => {
+	it("records the referring site, host only, and Direct when there is none", async () => {
+		await hit(POST, { ...visitorA, referer: "https://www.google.com/search?q=hello+world" });
+		await hit(POST, { ...visitorB, referer: null });
+		const rows = await host.inspect.storage.list<{ source: string; count: number }>("sources");
+		const by = Object.fromEntries(rows.map((r) => [r.data.source, r.data.count]));
+		expect(by["google.com"]).toBe(1);
+		expect(by["Direct"]).toBe(1);
+
+		const page = await host.admin.loadPage("/overview");
+		const tables = page.blocks.filter((b) => b.type === "table");
+		const sources = tables[1];
+		const srcRows = sources && "rows" in sources ? (sources.rows as Array<{ source: string; share: string }>) : [];
+		expect(srcRows.map((r) => r.source).sort()).toEqual(["Direct", "google.com"]);
+		expect(srcRows[0]?.share).toBe("50%");
+	});
+
+	it("shows an arrow against yesterday on the Today card", async () => {
+		const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+		await host.fixtures.plugin.storage("daily", `posts:post-live:${yesterday}`, {
+			entryKey: "posts:post-live",
+			collection: "posts",
+			entryId: "post-live",
+			day: yesterday,
+			count: 4,
+		});
+		await hit(POST, visitorA);
+		await hit(POST, visitorB);
+
+		const widget = await host.admin.loadWidget("popular");
+		const stats = widget.blocks[0];
+		const today = stats && "items" in stats ? stats.items[0] : undefined;
+		expect(today?.label).toBe("Today");
+		expect(today?.trend).toBe("down");
+		expect(today?.description).toBe("-50% vs yesterday");
+	});
+});

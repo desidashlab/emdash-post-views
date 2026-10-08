@@ -5,7 +5,7 @@ Privacy-first view counter for [EmDash CMS](https://emdashcms.com). See which po
 ## What you get
 
 - **Dashboard**: today, last 7 days, all time, and your three most-read entries.
-- **Post Views page**: pick a period, see the chart and the full list, open any entry.
+- **Post Views page**: pick a period, see the chart, the full list, and where readers came from.
 - **In the editor**: that entry's views today, this week, this month, and all time.
 
 Each visitor is counted once per page per day. No cookies, no Google, nothing leaves your site.
@@ -47,6 +47,7 @@ Open **Plugins**, then **Settings** next to Post Views.
 
 - No cookies, no local storage, no fingerprinting library.
 - The daily visitor hash combines IP, user agent, entry, and date, and is deleted the next night.
+- Referring sites are stored as a site name only, such as google.com, never the full address.
 - Nothing leaves your site. There are no outbound network requests.
 
 ## Development
