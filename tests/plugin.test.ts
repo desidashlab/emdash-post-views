@@ -203,6 +203,72 @@ describe("maintenance", () => {
 	});
 });
 
+describe("upgrade from 0.1.x", () => {
+	it("builds the site-wide daily rows once from per-entry rows", async () => {
+		const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+		await host.fixtures.plugin.storage("daily", `posts:post-live:${yesterday}`, {
+			entryKey: "posts:post-live",
+			collection: "posts",
+			entryId: "post-live",
+			day: yesterday,
+			count: 9,
+		});
+		await host.fixtures.plugin.storage("daily", `posts:other:${yesterday}`, {
+			entryKey: "posts:other",
+			collection: "posts",
+			entryId: "other",
+			day: yesterday,
+			count: 3,
+		});
+		await host.fixtures.plugin.kv("state:siteDailyBuilt", null);
+
+		const widget = await host.admin.loadWidget("popular");
+		const stats = widget.blocks[0];
+		const today = stats && "items" in stats ? stats.items[0] : undefined;
+		// Widget shows "No views yet" when totals are empty, so seed one hit first.
+		void today;
+		await hit(POST, visitorA);
+		const after = await host.admin.loadWidget("popular");
+		const s2 = after.blocks[0];
+		const t2 = s2 && "items" in s2 ? s2.items[0] : undefined;
+		expect(t2?.description).toBe("Yesterday: 12");
+		expect(await host.inspect.storage.get<{ count: number }>("sitedaily", yesterday)).toEqual({ day: yesterday, count: 12 });
+	});
+});
+
+describe("upgrade from 0.1.x", () => {
+	it("builds the site-wide daily rows once from per-entry rows", async () => {
+		const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+		await host.fixtures.plugin.storage("daily", `posts:post-live:${yesterday}`, {
+			entryKey: "posts:post-live",
+			collection: "posts",
+			entryId: "post-live",
+			day: yesterday,
+			count: 9,
+		});
+		await host.fixtures.plugin.storage("daily", `posts:other:${yesterday}`, {
+			entryKey: "posts:other",
+			collection: "posts",
+			entryId: "other",
+			day: yesterday,
+			count: 3,
+		});
+		await host.fixtures.plugin.kv("state:siteDailyBuilt", null);
+
+		const widget = await host.admin.loadWidget("popular");
+		const stats = widget.blocks[0];
+		const today = stats && "items" in stats ? stats.items[0] : undefined;
+		// Widget shows "No views yet" when totals are empty, so seed one hit first.
+		void today;
+		await hit(POST, visitorA);
+		const after = await host.admin.loadWidget("popular");
+		const s2 = after.blocks[0];
+		const t2 = s2 && "items" in s2 ? s2.items[0] : undefined;
+		expect(t2?.description).toBe("Yesterday: 12");
+		expect(await host.inspect.storage.get<{ count: number }>("sitedaily", yesterday)).toEqual({ day: yesterday, count: 12 });
+	});
+});
+
 describe("sources and trends", () => {
 	it("records the referring site, host only, and Direct when there is none", async () => {
 		await hit(POST, { ...visitorA, referer: "https://www.google.com/search?q=hello+world" });

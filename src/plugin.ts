@@ -178,6 +178,22 @@ async function entryCount(ctx: PluginContext, key: string, days: number, total: 
 	return sum;
 }
 
+const BACKFILL_KEY = "state:siteDailyBuilt";
+
+/**
+ * Sites upgraded from 0.1.x have per-entry daily rows but no site-wide rows.
+ * Build them once from what exists, then remember that it is done.
+ */
+async function ensureSiteDaily(ctx: PluginContext): Promise<void> {
+	if (await ctx.kv.get<boolean>(BACKFILL_KEY)) return;
+	const byDay = new Map<string, number>();
+	await eachDaily(ctx, daysAgo(RETENTION_DAYS - 1), null, (r) => byDay.set(r.day, (byDay.get(r.day) ?? 0) + r.count));
+	const { siteDaily } = stores(ctx);
+	const items = [...byDay.entries()].map(([day, count]) => ({ id: day, data: { day, count } }));
+	for (let i = 0; i < items.length; i += 100) await siteDaily.putMany(items.slice(i, i + 100));
+	await ctx.kv.set(BACKFILL_KEY, true);
+}
+
 /** Walk the site-wide one-row-per-day table between two days, inclusive. */
 async function eachSiteDay(ctx: PluginContext, since: string, until: string, visit: (row: SiteDayRow) => void): Promise<void> {
 	const { siteDaily } = stores(ctx);
@@ -306,6 +322,7 @@ function snippet(pluginId: string): string {
 }
 
 async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
+	await ensureSiteDaily(ctx);
 	const { totals } = stores(ctx);
 	const retention = RETENTION_DAYS;
 	const days = await currentRange(ctx, retention);
@@ -445,6 +462,7 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 }
 
 async function popularWidget(ctx: PluginContext): Promise<BlockResponse> {
+	await ensureSiteDaily(ctx);
 	const top = await topEntries(ctx, 3);
 	if (top.length === 0) {
 		return {
@@ -562,6 +580,7 @@ const plugin: SandboxedPlugin = {
 	hooks: {
 		"plugin:activate": async (_event, ctx) => {
 			await ctx.cron?.schedule("cleanup", { schedule: "0 3 * * *" });
+			await ensureSiteDaily(ctx);
 		},
 		"plugin:deactivate": async (_event, ctx) => {
 			await ctx.cron?.cancel("cleanup").catch(() => {});
