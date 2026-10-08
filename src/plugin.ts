@@ -229,12 +229,12 @@ async function siteWindow(ctx: PluginContext, fromDaysAgo: number, toDaysAgo: nu
 
 /** Plain-words name for the period before the chosen one. */
 function beforeLabel(days: number): string {
-	if (days === 7) return "Week before";
-	if (days === 30) return "Month before";
-	if (days === 90) return "3 months before";
-	if (days === 180) return "6 months before";
-	if (days === 365) return "Year before";
-	return `${days} days before`;
+	if (days === 7) return "Last week";
+	if (days === 30) return "Last month";
+	if (days === 90) return "3 months earlier";
+	if (days === 180) return "6 months earlier";
+	if (days === 365) return "Last year";
+	return `${days} days earlier`;
 }
 
 /** A fair comparison gets an arrow and the earlier number. With no earlier data, say nothing. */
