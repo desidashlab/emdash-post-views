@@ -113,12 +113,13 @@ describe("admin surfaces", () => {
 		const types = page.blocks.map((b) => b.type);
 		expect(types).toContain("stats");
 		expect(types).toContain("table");
-		expect(types).toContain("code");
+		expect(types).toContain("accordion");
 
 		const table = page.blocks.find((b) => b.type === "table");
 		expect(table && "rows" in table ? table.rows : []).toHaveLength(1);
 
-		const code = page.blocks.find((b) => b.type === "code");
+		const setup = page.blocks.find((b) => b.type === "accordion");
+		const code = setup && "blocks" in setup ? setup.blocks.find((b) => b.type === "code") : undefined;
 		expect(code && "code" in code ? code.code : "").toContain("/hit");
 	});
 
@@ -148,21 +149,6 @@ describe("admin surfaces", () => {
 		expect(types.filter((t) => t === "section").length).toBeGreaterThanOrEqual(2);
 	});
 
-	it("lets the owner choose what the widget shows", async () => {
-		await hit(POST);
-		await host.fixtures.plugin.setting("widgetToday", false);
-		await host.fixtures.plugin.setting("widgetPeriod", "30");
-		await host.fixtures.plugin.setting("widgetAllTime", false);
-		await host.fixtures.plugin.setting("widgetListCount", 0);
-		await host.fixtures.plugin.setting("widgetShowLink", false);
-
-		const widget = await host.admin.loadWidget("popular");
-		expect(widget.blocks.map((b) => b.type)).toEqual(["stats"]);
-		const stats = widget.blocks[0];
-		const labels = stats && "items" in stats ? stats.items.map((s) => s.label) : [];
-		expect(labels).toEqual(["Last 30 days"]);
-	});
-
 	it("shows per-entry numbers in the editor panel", async () => {
 		const before = await host.admin.loadEditorPanel("views", "posts", "post-live");
 		expect(before.blocks[0]?.type).toBe("context");
@@ -172,12 +158,15 @@ describe("admin surfaces", () => {
 		expect(after.blocks[0]?.type).toBe("fields");
 	});
 
-	it("resets a single entry and then everything", async () => {
-		await hit(POST);
-		const one = await host.admin.act("/overview", "reset_entry", { value: "posts:post-live" });
-		expect(one.toast?.message).toBe("Entry reset");
-		expect(await host.inspect.storage.list("totals")).toHaveLength(0);
+	it("shows the setup banner with the snippet before any views", async () => {
+		const page = await host.admin.loadPage("/overview");
+		const types = page.blocks.map((b) => b.type);
+		expect(types).toContain("banner");
+		expect(types).toContain("code");
+		expect(types).not.toContain("table");
+	});
 
+	it("resets everything", async () => {
 		await hit(POST, visitorB);
 		const all = await host.admin.act("/overview", "reset_all");
 		expect(all.toast?.message).toBe("All counts reset");

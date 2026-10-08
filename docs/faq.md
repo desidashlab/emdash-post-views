@@ -1,27 +1,23 @@
-## Does it count posts only?
+## What does it count?
 
-No. Any published entry whose page carries the snippet is counted: posts, pages, products, anything. Your theme decides which pages include the snippet, and the Starter, Blog, Portfolio, and Marketing templates pass the content reference on every content page.
+Every time someone opens a published post or page on your site. Each visitor is counted once per page per day, so refreshing does not add views.
 
-## Can I choose what the dashboard widget shows?
+## Does it use Google Analytics or cookies?
 
-Yes. Open **Plugins**, then **Settings** next to Post Views. You can switch the Today, period, and All time cards on or off, pick the period, choose how many most-read entries to list and how to rank them, and hide the All entries button.
+No. Nothing is sent anywhere and no cookies are set. The counts live on your own site.
 
-## Is this GDPR or DPDP safe?
+## Does it count pages too, or only posts?
 
-The plugin sets no cookies and stores nothing that identifies a person. Each visitor is counted once per entry per day using a one-way hash of IP address and browser string, and that hash is deleted the next night. There are no outbound requests to any third party.
+Both. Anything your theme shows as a content page is counted.
 
-## Why do I see the same number for Today and All time?
+## Where do I see the numbers?
 
-Because the plugin was installed today. Daily history builds up from the day you add the snippet.
+Three places. The Dashboard shows today, the last 7 days, all time, and your three most-read entries. The Post Views page shows the full list, a chart, and lets you pick a period. The editor shows that entry's views in the sidebar.
 
-## Can I see a chart?
+## Why do Today and All time show the same number?
 
-Yes. On the Post Views page choose a range of 7 days or longer. The chart shows daily views over that range, from the daily history kept by the **Keep daily history** setting.
+Because you installed it today. The history builds from here.
 
-## Does it count editors and previews?
+## Can I start over?
 
-Only published entries are counted. Preview and draft views are ignored. Administrators reading the live site do count, like any visitor, once per day.
-
-## How do I reset the numbers?
-
-On the Post Views page, each row has a **Reset** button, and **Reset all counts** at the bottom clears everything. Both ask for confirmation.
+Yes. On the Post Views page, Reset all counts sets everything back to zero.

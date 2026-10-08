@@ -5,7 +5,7 @@
 	"publisher": "did:plc:vvm75pgx6ihqfuil7y5awyge",
 
 	"name": "Post Views",
-	"description": "Privacy-first view counter. Popular posts on your dashboard and per-entry stats, with no third-party analytics.",
+	"description": "See which posts and pages people read. Views on your dashboard and in the editor. No Google, no cookies.",
 	"keywords": ["views", "analytics", "popular posts", "statistics", "privacy"],
 	"repo": "https://github.com/desidashlab/emdash-post-views",
 
@@ -66,60 +66,20 @@
 		"settingsSchema": {
 			"uniquePerDay": {
 				"label": "Count each visitor once per day",
-				"description": "Uses a one-way hash of the visitor's IP and browser. No cookies, nothing personal stored.",
+				"description": "Recommended. Refreshing a page does not add views.",
 				"type": "boolean",
 				"default": true
 			},
-			"retentionDays": {
-				"label": "Keep daily history for (days)",
-				"description": "Totals are kept forever. Per-day rows older than this are removed nightly. Charts and ranges can only go back this far.",
-				"type": "number",
-				"default": 90,
-				"min": 7,
-				"max": 730
-			},
-			"widgetToday": {
-				"label": "Dashboard: show Today",
-				"type": "boolean",
-				"default": true
-			},
-			"widgetPeriod": {
-				"label": "Dashboard: show a period",
+			"keepHistory": {
+				"label": "Keep day-by-day history for",
+				"description": "All-time totals are always kept.",
 				"type": "select",
 				"options": [
-					{ "value": "none", "label": "Do not show" },
-					{ "value": "7", "label": "Last 7 days" },
-					{ "value": "30", "label": "Last 30 days" },
-					{ "value": "90", "label": "Last 90 days" }
+					{ "value": "3", "label": "3 months" },
+					{ "value": "6", "label": "6 months" },
+					{ "value": "12", "label": "1 year" }
 				],
-				"default": "7"
-			},
-			"widgetAllTime": {
-				"label": "Dashboard: show All time",
-				"type": "boolean",
-				"default": true
-			},
-			"widgetListCount": {
-				"label": "Dashboard: most-read entries to list",
-				"description": "Set to 0 to hide the list.",
-				"type": "number",
-				"default": 5,
-				"min": 0,
-				"max": 10
-			},
-			"widgetListBy": {
-				"label": "Dashboard: rank most read by",
-				"type": "select",
-				"options": [
-					{ "value": "total", "label": "All-time views" },
-					{ "value": "period", "label": "Views in the chosen period" }
-				],
-				"default": "total"
-			},
-			"widgetShowLink": {
-				"label": "Dashboard: show the All entries button",
-				"type": "boolean",
-				"default": true
+				"default": "3"
 			}
 		}
 	}

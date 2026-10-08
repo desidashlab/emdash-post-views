@@ -1,16 +1,16 @@
+## 0.2.0
+
+- Simpler everywhere. The Dashboard shows today, last 7 days, all time, and the three most-read entries.
+- Settings reduced to two: count each visitor once per day, and how long to keep day-by-day history.
+- Post Views page shows a period picker, three numbers, the chart, and the list. Setup instructions move into a collapsed section once views are coming in.
+- Plain-language description, install steps, and FAQ.
+- Banner image fixed so nothing is cut off on the registry page.
+
 ## 0.1.1
 
-- Dashboard widget is fully configurable in the plugin settings: which cards, which period, how many most-read entries, how they are ranked.
-- Removed the comma-separated collections setting. Every published entry with the snippet is counted.
-- Icon, banner, and screenshots for the registry listing.
-- Editor panel uses a compact label/value layout that fits the sidebar.
-- Theme snippet is wrapped across lines so the page no longer scrolls sideways.
-- Singular "1 view" label on the dashboard widget.
-- MIT license file included.
+- Icon, banner, and screenshots for the listing.
+- Configurable dashboard widget, compact editor panel, wrapped snippet, MIT license file.
 
 ## 0.1.0
 
 - First release. Counts views for posts and pages, once per visitor per day, with no cookies.
-- Dashboard widget, editor panel, Post Views page with range picker and daily chart.
-- Public `count` and `top` routes for themes.
-- Nightly cleanup with configurable retention.

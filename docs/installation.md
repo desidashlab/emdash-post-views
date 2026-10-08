@@ -1,16 +1,7 @@
-## Install
+## Three steps
 
-1. Open **Registry** in your EmDash admin, search for **Post Views**, and click **Install**.
-2. Approve the single permission, *read content*. The plugin uses it to confirm an entry exists and is published, and to remember its title for the most-read list.
-3. Open **Post Views** in the left menu and copy the theme snippet shown at the bottom of the page.
+1. In your EmDash admin open **Registry**, search for **Post Views**, and click **Install**. It asks for one permission, reading your content, so it can show post titles.
+2. Open **Post Views** in the left menu. Copy the short snippet shown there.
+3. Paste it into your theme once, just before `</body>` in the base layout. If someone else built your site, send them the snippet. That is all.
 
-## Add the snippet to your theme
-
-The plugin cannot change your public pages, so one small script reports a view when a content page loads. Paste the snippet once into your base layout, for example `src/layouts/Base.astro`, just before `</body>`. It uses the `content` prop that EmDash templates already pass to the layout on content pages. No cookies are set.
-
-## Show counts on your site (optional)
-
-- One entry: `GET /_emdash/api/plugins/<plugin id>/count?collection=posts&id=<entry id>`
-- Most read: `GET /_emdash/api/plugins/<plugin id>/top?limit=5&collection=posts`
-
-Both routes are public and cached briefly, so they are safe to call from an Astro page or from the browser.
+Views start counting the moment the snippet is in place. You will see them on your Dashboard, on the Post Views page, and in the editor beside each post.

@@ -4,32 +4,17 @@ Privacy-first view counter for [EmDash CMS](https://emdashcms.com). See which po
 
 ## What you get
 
-- **Popular posts** widget on the Dashboard: today, last 7 days, and the five most-read entries.
-- **Views** panel in the editor: today, last 7 days, and all-time for the entry you are editing.
-- **Post Views** page: every tracked entry sorted by views, per-entry reset, reset all, and the theme snippet.
-- **Two public JSON routes** for themes: a single entry's count, and the most-read list for "Trending" sections.
+- **Dashboard**: today, last 7 days, all time, and your three most-read entries.
+- **Post Views page**: pick a period, see the chart and the full list, open any entry.
+- **In the editor**: that entry's views today, this week, this month, and all time.
 
-Each visitor is counted once per entry per day using a one-way hash of IP address and browser string. The hash is deleted every night. No cookies are set and nothing personal is stored. Only published entries are counted; drafts, previews, and unknown IDs are ignored.
+Each visitor is counted once per page per day. No cookies, no Google, nothing leaves your site.
 
 ## Install
 
-1. In your EmDash admin, open **Registry**, search for **Post Views**, and click **Install**.
-2. Approve the single permission: read content. The plugin needs it to confirm an entry exists and is published, and to remember its title.
-3. Open **Plugins → Post Views** and copy the theme snippet.
-
-## Add the snippet to your theme
-
-The plugin cannot change your public pages, so one small script reports a view when a content page loads. Paste this into your base layout, for example `src/layouts/Base.astro`, just before `</body>`. It relies on the `content` prop that EmDash templates already pass to the layout on content pages.
-
-```astro
-{content && (
-	<script is:inline define:vars={{ pv: { c: content.collection, i: content.id, u: "/_emdash/api/plugins/<plugin id>/hit" } }}>
-		fetch(pv.u, { method: "POST", keepalive: true, headers: { "Content-Type": "application/json" }, body: JSON.stringify({ collection: pv.c, id: pv.i }) }).catch(() => {});
-	</script>
-)}
-```
-
-The Post Views admin page shows this snippet with your site's real plugin ID filled in.
+1. In your EmDash admin open **Registry**, search for **Post Views**, and click **Install**.
+2. Open **Post Views** in the left menu and copy the snippet.
+3. Paste it into your theme once, just before `</body>` in the base layout. The Post Views page shows the snippet with your site's plugin ID already filled in.
 
 ## Show counts on your site
 
@@ -53,18 +38,10 @@ Both routes are public and cached for a short time, so they are safe to call fro
 
 Open **Plugins**, then **Settings** next to Post Views.
 
-| Setting | Default | What it does |
-|---|---|---|
-| Count each visitor once per day | on | Turn off to count every page load. |
-| Keep daily history for (days) | 90 | Per-day rows older than this are removed nightly. All-time totals are kept forever. |
-| Dashboard: show Today | on | Today's views card on the dashboard widget. |
-| Dashboard: show a period | Last 7 days | A second card for the last 7, 30, or 90 days, or none. |
-| Dashboard: show All time | on | The all-time card. |
-| Dashboard: most-read entries to list | 5 | How many entries to list, 0 hides the list. |
-| Dashboard: rank most read by | All-time views | Rank by all-time views or by views in the chosen period. |
-| Dashboard: show the All entries button | on | Link to the full Post Views page. |
-
-There is nothing to configure about which content is counted. Any published entry whose page carries the snippet is counted; the theme decides which pages do.
+| Setting | Default |
+|---|---|
+| Count each visitor once per day | on |
+| Keep day-by-day history for | 3 months. All-time totals are always kept. |
 
 ## Privacy
 

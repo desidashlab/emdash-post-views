@@ -56,39 +56,16 @@ async function currentRange(ctx: PluginContext): Promise<number> {
 interface Settings {
 	uniquePerDay: boolean;
 	retentionDays: number;
-	widgetToday: boolean;
-	widgetPeriod: number; // 0 = do not show
-	widgetAllTime: boolean;
-	widgetListCount: number;
-	widgetListBy: "total" | "period";
-	widgetShowLink: boolean;
 }
 
-/** All settings with their defaults applied. Values come from the host's settings form. */
+/** Settings with defaults applied. Values come from the host's settings form. */
 async function loadSettings(ctx: PluginContext): Promise<Settings> {
-	const s = ctx.settings;
-	const bool = async (key: string, d: boolean) => {
-		const v = await s.get<boolean>(key);
-		return typeof v === "boolean" ? v : d;
-	};
-	const num = async (key: string, d: number, min: number, max: number) => {
-		const raw = await s.get<number | string>(key);
-		if (raw === null || raw === undefined || raw === "") return d;
-		const v = Number(raw);
-		return Number.isFinite(v) ? Math.min(max, Math.max(min, Math.round(v))) : d;
-	};
-	const periodRaw = (await s.get<string>("widgetPeriod")) ?? "7";
-	const period = periodRaw === "none" ? 0 : Number(periodRaw) || 7;
-	const listBy = (await s.get<string>("widgetListBy")) === "period" ? "period" : "total";
+	const unique = await ctx.settings.get<boolean>("uniquePerDay");
+	const keep = await ctx.settings.get<string>("keepHistory");
+	const months = keep === "6" ? 6 : keep === "12" ? 12 : 3;
 	return {
-		uniquePerDay: await bool("uniquePerDay", true),
-		retentionDays: await num("retentionDays", 90, 7, 730),
-		widgetToday: await bool("widgetToday", true),
-		widgetPeriod: period,
-		widgetAllTime: await bool("widgetAllTime", true),
-		widgetListCount: await num("widgetListCount", 5, 0, 10),
-		widgetListBy: listBy,
-		widgetShowLink: await bool("widgetShowLink", true),
+		uniquePerDay: typeof unique === "boolean" ? unique : true,
+		retentionDays: months * 30,
 	};
 }
 
@@ -242,7 +219,6 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 	const days = await currentRange(ctx);
 	const label = rangeLabel(days);
 	const retention = settings.retentionDays;
-	// Daily history only exists for `retention` days, so a longer range is charted over what we keep.
 	const chartDays = Math.min(days === 0 ? retention : days, retention);
 
 	const [tracked, todayViews, rangeViews, top, series] = await Promise.all([
@@ -257,7 +233,6 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 	const rows = await Promise.all(
 		top.map(async (r) => ({
 			title: r.data.title,
-			collection: r.data.collection,
 			range: await entryCount(ctx, r.id, days, r.data.total),
 			total: r.data.total,
 			last: r.data.lastViewedAt,
@@ -266,31 +241,39 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 				label: "Open",
 				target: { kind: "content", collection: r.data.collection, id: r.data.entryId },
 			},
-			reset: {
-				type: "button",
-				label: "Reset",
-				action_id: "reset_entry",
-				value: r.id,
-				style: "secondary",
-				confirm: {
-					title: "Reset this entry?",
-					text: `All views for "${r.data.title}" will be set to zero.`,
-					confirm: "Reset",
-					deny: "Cancel",
-				},
-			},
 		})),
 	);
 
-	const blocks: Block[] = [
-		{ type: "header", text: "Post Views" },
+	const setup: Block[] = [
+		{
+			type: "context",
+			text: "Paste this once into your theme's base layout, just before </body>. After that, every post and page reports its views here.",
+		},
+		{ type: "code", language: "tsx", code: snippet(ctx.plugin.id) },
+	];
+
+	const blocks: Block[] = [{ type: "header", text: "Post Views" }];
+
+	if (tracked === 0) {
+		blocks.push(
+			{
+				type: "banner",
+				title: "One step to finish setup",
+				description: "Views start counting as soon as the snippet below is in your theme.",
+			},
+			...setup,
+		);
+		return { blocks };
+	}
+
+	blocks.push(
 		{
 			type: "section",
-			text: `Showing ${label.toLowerCase()}.`,
+			text: `Views, ${label.toLowerCase()}.`,
 			accessory: {
 				type: "menu",
 				action_id: "set_range",
-				label: label,
+				label,
 				items: RANGES.map((r) => ({ label: r.label, value: String(r.days) })),
 			},
 		},
@@ -300,19 +283,9 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 				{ label: "Today", value: fmt(todayViews) },
 				...(days === 0 || days === 1 ? [] : [{ label, value: fmt(rangeViews ?? 0) }]),
 				{ label: "All time", value: fmt(allTime) },
-				{ label: "Entries tracked", value: fmt(tracked) },
 			],
 		},
-	];
-
-	if (tracked === 0) {
-		blocks.push({
-			type: "banner",
-			title: "No views recorded yet",
-			description:
-				"Add the snippet below to your theme. Views are counted as soon as a published entry is opened on the public site.",
-		});
-	}
+	);
 
 	if (series) {
 		blocks.push({
@@ -322,15 +295,9 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 				series: [{ name: "Views", data: series }],
 				style: "bar",
 				y_axis_name: "Views",
-				height: 240,
+				height: 220,
 			},
 		});
-		if (days === 0 || days > retention) {
-			blocks.push({
-				type: "context",
-				text: `Chart shows the last ${retention} days, the daily history kept by the retention setting.`,
-			});
-		}
 	}
 
 	blocks.push(
@@ -338,12 +305,10 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 			type: "table",
 			columns: [
 				{ key: "title", label: "Entry" },
-				{ key: "collection", label: "Collection", format: "badge" },
-				{ key: "range", label, format: "number" },
+				{ key: "range", label: days === 0 ? "Views" : label, format: "number" },
 				{ key: "total", label: "All time", format: "number" },
 				{ key: "last", label: "Last viewed", format: "relative_time" },
 				{ key: "open", label: "", format: "element" },
-				{ key: "reset", label: "", format: "element" },
 			],
 			rows,
 			page_action_id: "browse",
@@ -352,7 +317,6 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 		{
 			type: "actions",
 			elements: [
-				{ type: "button", label: "Refresh", action_id: "refresh", style: "secondary" },
 				{
 					type: "button",
 					label: "Reset all counts",
@@ -360,40 +324,29 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 					style: "secondary",
 					confirm: {
 						title: "Reset every count?",
-						text: "All totals and daily history will be deleted. This cannot be undone.",
-						confirm: "Reset everything",
+						text: "All views will be set to zero. This cannot be undone.",
+						confirm: "Reset",
 						deny: "Cancel",
 						style: "danger",
 					},
 				},
 			],
 		},
-		{ type: "divider" },
-		{ type: "header", text: "Theme snippet" },
-		{
-			type: "context",
-			text: "The plugin cannot change your public pages. Paste this once into your base layout so every content page reports a view. No cookies are set and nothing personal is stored.",
-		},
-		{ type: "code", language: "tsx", code: snippet(ctx.plugin.id) },
-		{
-			type: "context",
-			text: `Themes can also read counts: GET /_emdash/api/plugins/${ctx.plugin.id}/count?collection=posts&id=<entry id>, and the most-read list at /_emdash/api/plugins/${ctx.plugin.id}/top.`,
-		},
+		{ type: "accordion", label: "Setup", default_open: false, blocks: setup },
 	);
 
 	return { blocks };
 }
 
 async function popularWidget(ctx: PluginContext): Promise<BlockResponse> {
-	const s = await loadSettings(ctx);
-	const top = await topEntries(ctx, 50);
+	const top = await topEntries(ctx, 3);
 	if (top.length === 0) {
 		return {
 			blocks: [
 				{
 					type: "empty",
 					title: "No views yet",
-					description: "Add the theme snippet from the Post Views page.",
+					description: "Finish setup on the Post Views page.",
 					size: "sm",
 					actions: [
 						{
@@ -407,56 +360,40 @@ async function popularWidget(ctx: PluginContext): Promise<BlockResponse> {
 			],
 		};
 	}
-
-	const blocks: Block[] = [];
-
-	// Stat cards, each one switchable in the plugin's settings.
-	const items: { label: string; value: string }[] = [];
-	if (s.widgetToday) items.push({ label: "Today", value: fmt(await siteCount(ctx, 1)) });
-	if (s.widgetPeriod > 0) items.push({ label: rangeLabel(s.widgetPeriod), value: fmt(await siteCount(ctx, s.widgetPeriod)) });
-	if (s.widgetAllTime) items.push({ label: "All time", value: fmt(top.reduce((a, r) => a + r.data.total, 0)) });
-	if (items.length > 0) blocks.push({ type: "stats", items });
-
-	// Most-read list, ranked by all-time views or by the chosen period.
-	if (s.widgetListCount > 0) {
-		const periodDays = s.widgetListBy === "period" && s.widgetPeriod > 0 ? s.widgetPeriod : 0;
-		const ranked = await Promise.all(
-			top.map(async (r) => ({ row: r, n: await entryCount(ctx, r.id, periodDays, r.data.total) })),
-		);
-		ranked.sort((a, b) => b.n - a.n);
-		const listed = ranked.filter((x) => x.n > 0).slice(0, s.widgetListCount);
-		blocks.push({
-			type: "context",
-			text: periodDays ? `Most read, ${rangeLabel(periodDays).toLowerCase()}` : "Most read",
-		});
-		for (const { row, n } of listed) {
-			blocks.push({
-				type: "section",
-				text: `${row.data.title}  ·  ${row.data.collection}`,
-				accessory: {
-					type: "link",
-					label: views(n),
-					target: { kind: "content", collection: row.data.collection, id: row.data.entryId },
-				},
-			});
-		}
-		if (listed.length === 0) blocks.push({ type: "context", text: "No views in this period yet." });
-	}
-
-	if (s.widgetShowLink) {
+	const [todayViews, weekViews] = await Promise.all([siteCount(ctx, 1), siteCount(ctx, 7)]);
+	const allTime = (await topEntries(ctx, 100)).reduce((s, r) => s + r.data.total, 0);
+	const blocks: Block[] = [
+		{
+			type: "stats",
+			items: [
+				{ label: "Today", value: fmt(todayViews) },
+				{ label: "Last 7 days", value: fmt(weekViews) },
+				{ label: "All time", value: fmt(allTime) },
+			],
+		},
+		{ type: "context", text: "Most read" },
+	];
+	for (const r of top) {
 		blocks.push({
 			type: "section",
-			text: "",
+			text: r.data.title,
 			accessory: {
 				type: "link",
-				label: "All entries",
-				target: { kind: "plugin-page", path: "/overview" },
-				appearance: "secondary",
+				label: views(r.data.total),
+				target: { kind: "content", collection: r.data.collection, id: r.data.entryId },
 			},
 		});
 	}
-
-	if (blocks.length === 0) blocks.push({ type: "context", text: "Everything is hidden in the Post Views settings." });
+	blocks.push({
+		type: "section",
+		text: "",
+		accessory: {
+			type: "link",
+			label: "See all",
+			target: { kind: "plugin-page", path: "/overview" },
+			appearance: "secondary",
+		},
+	});
 	return { blocks };
 }
 
@@ -502,12 +439,6 @@ async function purge<T>(col: StorageCollection<T>, where: Record<string, unknown
 		removed += await col.deleteMany(page.items.map((i) => i.id));
 		if (!page.hasMore) return removed;
 	}
-}
-
-async function resetEntry(ctx: PluginContext, key: string): Promise<void> {
-	const { totals, daily } = stores(ctx);
-	await totals.delete(key);
-	await purge(daily, { entryKey: key });
 }
 
 async function resetAll(ctx: PluginContext): Promise<void> {
@@ -650,10 +581,6 @@ const plugin: SandboxedPlugin = {
 					if (i.action_id === "reset_all") {
 						await resetAll(ctx);
 						return { ...(await overviewPage(ctx)), toast: { type: "success", message: "All counts reset" } };
-					}
-					if (i.action_id === "reset_entry" && typeof i.value === "string") {
-						await resetEntry(ctx, i.value);
-						return { ...(await overviewPage(ctx)), toast: { type: "success", message: "Entry reset" } };
 					}
 				}
 
