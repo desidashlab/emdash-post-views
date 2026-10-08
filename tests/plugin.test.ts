@@ -308,8 +308,10 @@ describe("sources and trends", () => {
 
 		const week = stats && "items" in stats ? stats.items[1] : undefined;
 		expect(week?.label).toBe("Last 7 days");
-		// Nothing in the week before, so no arrow and no comparison line.
+		// Nothing in the week before, so no arrow, and a plain line keeps the cards aligned.
 		expect(week?.trend).toBeUndefined();
-		expect(week?.description).toBeUndefined();
+		expect(week?.description).toBe("No earlier data yet");
+		const all = stats && "items" in stats ? stats.items[2] : undefined;
+		expect(all?.description?.startsWith("Since ")).toBe(true);
 	});
 });

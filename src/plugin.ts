@@ -237,9 +237,9 @@ function beforeLabel(days: number): string {
 	return `${days} days earlier`;
 }
 
-/** A fair comparison gets an arrow and the earlier number. With no earlier data, say nothing. */
-function trendOf(current: number, previous: number, vs: string): { trend?: "up" | "down" | "neutral"; description?: string } {
-	if (previous === 0) return {};
+/** A fair comparison gets an arrow and the earlier number. Every card always has a line, so the cards line up. */
+function trendOf(current: number, previous: number, vs: string): { trend?: "up" | "down" | "neutral"; description: string } {
+	if (previous === 0) return { description: "No earlier data yet" };
 	const description = `${vs}: ${fmt(previous)}`;
 	if (current === previous) return { trend: "neutral", description };
 	return { trend: current > previous ? "up" : "down", description };
@@ -248,13 +248,22 @@ function trendOf(current: number, previous: number, vs: string): { trend?: "up" 
 /** Today's card. A part of a day against a whole day is not a fair comparison, so no arrow, just yesterday's number. */
 async function todayCard(ctx: PluginContext) {
 	const [t, y] = await Promise.all([siteCount(ctx, 1), siteWindow(ctx, 1, 1)]);
-	return y > 0 ? { label: "Today", value: fmt(t), description: `Yesterday: ${fmt(y)}` } : { label: "Today", value: fmt(t) };
+	return { label: "Today", value: fmt(t), description: `Yesterday: ${fmt(y)}` };
 }
 
 /** A period card with its arrow against the period before it. */
 async function periodCard(ctx: PluginContext, days: number, label: string) {
 	const [cur, prev] = await Promise.all([siteCount(ctx, days), siteWindow(ctx, days * 2 - 1, days)]);
 	return { label, value: fmt(cur), ...trendOf(cur, prev, beforeLabel(days)) };
+}
+
+/** The all-time card says since when it has been counting. */
+async function allTimeCard(ctx: PluginContext, allTime: number) {
+	const first = (await stores(ctx).siteDaily.query({ orderBy: { day: "asc" }, limit: 1 })).items[0]?.data.day;
+	const since = first
+		? new Date(`${first}T00:00:00Z`).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "UTC" })
+		: "today";
+	return { label: "All time", value: fmt(allTime), description: `Since ${since}` };
 }
 
 /** Referring site for a hit: host only, "Direct" when absent or from this site. */
@@ -399,7 +408,7 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 		},
 		{
 			type: "stats",
-			items: [today_, ...(rangeCard ? [rangeCard] : []), { label: "All time", value: fmt(allTime) }],
+			items: [today_, ...(rangeCard ? [rangeCard] : []), await allTimeCard(ctx, allTime)],
 		},
 	);
 
@@ -498,7 +507,7 @@ async function popularWidget(ctx: PluginContext): Promise<BlockResponse> {
 	const [t, w, all] = await Promise.all([todayCard(ctx), periodCard(ctx, 7, "Last 7 days"), topEntries(ctx, 100)]);
 	const allTime = all.reduce((s, r) => s + r.data.total, 0);
 	const blocks: Block[] = [
-		{ type: "stats", items: [t, w, { label: "All time", value: fmt(allTime) }] },
+		{ type: "stats", items: [t, w, await allTimeCard(ctx, allTime)] },
 		{ type: "context", text: "Most read" },
 	];
 	for (const r of top) {

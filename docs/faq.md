@@ -20,7 +20,7 @@ Yes. The Post Views page lists the sites that sent readers, for example google.c
 
 ## What do the small arrows and lines under the numbers mean?
 
-Under Today you see yesterday's number. Under a period such as Last 7 days you see last week's number, with an arrow: up means more views, down means fewer. When there is no earlier data yet, the line is simply not shown.
+Under Today you see yesterday's number. Under a period such as Last 7 days you see last week's number, with an arrow: up means more views, down means fewer. Under All time you see the date counting started.
 
 ## Why do Today and All time show the same number?
 
