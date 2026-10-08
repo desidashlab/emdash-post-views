@@ -20,6 +20,7 @@
 			"icon": { "file": "assets/icon.png" },
 			"banner": { "file": "assets/banner.png" },
 			"screenshots": [
+				{ "file": "assets/screenshot-week.jpg" },
 				{ "file": "assets/screenshot-overview.jpg" },
 				{ "file": "assets/screenshot-sources.jpg" },
 				{ "file": "assets/screenshot-dashboard.jpg" },

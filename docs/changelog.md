@@ -1,3 +1,7 @@
+## 0.2.1
+
+- New banner and a 7-day screenshot in the listing. No changes to the plugin itself.
+
 ## 0.2.0
 
 - Yesterday's number under Today, and an arrow with the previous period's number under each period card.
