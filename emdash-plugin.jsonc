@@ -31,7 +31,7 @@
 
 	"license": "MIT",
 	"author": { "name": "DesiDash Lab" },
-	"security": { "email": "liquifysolutionsdev1@gmail.com" },
+	"security": { "email": "desidashlab@gmail.com" },
 
 	// Trust contract: read entries so we can confirm an entry exists and is
 	// published before counting, and store its title for the popular list.
