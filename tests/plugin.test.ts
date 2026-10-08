@@ -4,8 +4,9 @@ import { createPluginRuntimeTestHost, type PluginRuntimeTestHost } from "@emdash
 
 let host: PluginRuntimeTestHost;
 
-const visitorA = { ip: "203.0.113.10", userAgent: "Mozilla/5.0 A", referer: null, geo: null };
-const visitorB = { ip: "203.0.113.11", userAgent: "Mozilla/5.0 B", referer: null, geo: null };
+type Visitor = { ip: string; userAgent: string; referer: string | null; geo: null };
+const visitorA: Visitor = { ip: "203.0.113.10", userAgent: "Mozilla/5.0 A", referer: null, geo: null };
+const visitorB: Visitor = { ip: "203.0.113.11", userAgent: "Mozilla/5.0 B", referer: null, geo: null };
 
 const POST = { collection: "posts", id: "post-live" };
 

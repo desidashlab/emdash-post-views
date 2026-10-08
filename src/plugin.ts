@@ -42,10 +42,16 @@ const RANGES = [
 	{ days: 1, label: "Today" },
 	{ days: 7, label: "Last 7 days" },
 	{ days: 30, label: "Last 30 days" },
-	{ days: 90, label: "Last 90 days" },
+	{ days: 90, label: "Last 3 months" },
+	{ days: 180, label: "Last 6 months" },
 	{ days: 365, label: "Last 12 months" },
 	{ days: 0, label: "All time" },
 ] as const;
+
+/** Only offer periods the kept day-by-day history can actually fill. */
+function rangesFor(retentionDays: number) {
+	return RANGES.filter((r) => r.days <= retentionDays);
+}
 
 const DEFAULT_RANGE = 7;
 const RANGE_KEY = "ui:rangeDays";
@@ -54,9 +60,9 @@ function rangeLabel(days: number): string {
 	return RANGES.find((r) => r.days === days)?.label ?? `Last ${days} days`;
 }
 
-async function currentRange(ctx: PluginContext): Promise<number> {
+async function currentRange(ctx: PluginContext, retentionDays: number): Promise<number> {
 	const saved = await ctx.kv.get<number>(RANGE_KEY);
-	return typeof saved === "number" && RANGES.some((r) => r.days === saved) ? saved : DEFAULT_RANGE;
+	return typeof saved === "number" && rangesFor(retentionDays).some((r) => r.days === saved) ? saved : DEFAULT_RANGE;
 }
 
 interface Settings {
@@ -294,9 +300,9 @@ function snippet(pluginId: string): string {
 async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 	const { totals } = stores(ctx);
 	const settings = await loadSettings(ctx);
-	const days = await currentRange(ctx);
-	const label = rangeLabel(days);
 	const retention = settings.retentionDays;
+	const days = await currentRange(ctx, retention);
+	const label = rangeLabel(days);
 	const chartDays = Math.min(days === 0 ? retention : days, retention);
 
 	const [tracked, today_, rangeCard, top, series, sources] = await Promise.all([
@@ -353,7 +359,7 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 				type: "menu",
 				action_id: "set_range",
 				label,
-				items: RANGES.map((r) => ({ label: r.label, value: String(r.days) })),
+				items: rangesFor(retention).map((r) => ({ label: r.label, value: String(r.days) })),
 			},
 		},
 		{
@@ -373,6 +379,12 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 				height: 220,
 			},
 		});
+		if (days === 0) {
+			blocks.push({
+				type: "context",
+				text: `All-time totals are exact. The chart and the sources cover the last ${Math.round(retention / 30)} months, the day-by-day history you keep. Change that in the plugin settings.`,
+			});
+		}
 	}
 
 	blocks.push(
@@ -660,7 +672,8 @@ const plugin: SandboxedPlugin = {
 				if (i.type === "block_action") {
 					if (i.action_id === "set_range") {
 						const days = Number(i.value);
-						if (RANGES.some((r) => r.days === days)) await ctx.kv.set(RANGE_KEY, days);
+						const { retentionDays } = await loadSettings(ctx);
+						if (rangesFor(retentionDays).some((r) => r.days === days)) await ctx.kv.set(RANGE_KEY, days);
 						return overviewPage(ctx);
 					}
 					if (i.action_id === "reset_all") {
