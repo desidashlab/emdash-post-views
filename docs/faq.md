@@ -26,6 +26,10 @@ Today is compared with yesterday, and the chosen period with the one before it. 
 
 Because you installed it today. The history builds from here.
 
+## How far back can I look?
+
+The chart, the periods, and the sources go back one year. All-time totals are kept forever.
+
 ## Can I start over?
 
 Yes. On the Post Views page, Reset all counts sets everything back to zero.

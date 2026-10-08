@@ -174,6 +174,7 @@ describe("admin surfaces", () => {
 		expect(await host.inspect.storage.list("totals")).toHaveLength(0);
 		expect(await host.inspect.storage.list("daily")).toHaveLength(0);
 		expect(await host.inspect.storage.list("seen")).toHaveLength(0);
+		expect(await host.inspect.storage.list("sitedaily")).toHaveLength(0);
 	});
 });
 
@@ -228,6 +229,7 @@ describe("sources and trends", () => {
 			day: yesterday,
 			count: 4,
 		});
+		await host.fixtures.plugin.storage("sitedaily", yesterday, { day: yesterday, count: 4 });
 		await hit(POST, visitorA);
 		await hit(POST, visitorB);
 

@@ -53,6 +53,10 @@
 		// Views per referring site per day. Host name only, never the full address.
 		"sources": {
 			"indexes": ["day", "source"]
+		},
+		// One row per day for the whole site, so charts and periods stay fast.
+		"sitedaily": {
+			"indexes": ["day"]
 		}
 	},
 
@@ -73,17 +77,6 @@
 				"description": "Recommended. Refreshing a page does not add views.",
 				"type": "boolean",
 				"default": true
-			},
-			"keepHistory": {
-				"label": "Chart and periods go back",
-				"description": "How far back the chart and the period picker can look. All-time totals are always kept.",
-				"type": "select",
-				"options": [
-					{ "value": "3", "label": "3 months" },
-					{ "value": "6", "label": "6 months" },
-					{ "value": "12", "label": "1 year" }
-				],
-				"default": "3"
 			}
 		}
 	}

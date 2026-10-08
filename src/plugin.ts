@@ -27,6 +27,11 @@ interface SeenRow {
 	day: string;
 }
 
+interface SiteDayRow {
+	day: string;
+	count: number;
+}
+
 interface SourceRow {
 	source: string; // referring site, e.g. "google.com", or "Direct"
 	day: string;
@@ -48,7 +53,6 @@ const RANGES = [
 	{ days: 0, label: "All time" },
 ] as const;
 
-/** Only offer periods the kept day-by-day history can actually fill. */
 function rangesFor(retentionDays: number) {
 	return RANGES.filter((r) => r.days <= retentionDays);
 }
@@ -65,20 +69,17 @@ async function currentRange(ctx: PluginContext, retentionDays: number): Promise<
 	return typeof saved === "number" && rangesFor(retentionDays).some((r) => r.days === saved) ? saved : DEFAULT_RANGE;
 }
 
+/** Day-by-day rows are kept for one year. All-time totals are kept forever. */
+const RETENTION_DAYS = 365;
+
 interface Settings {
 	uniquePerDay: boolean;
-	retentionDays: number;
 }
 
 /** Settings with defaults applied. Values come from the host's settings form. */
 async function loadSettings(ctx: PluginContext): Promise<Settings> {
 	const unique = await ctx.settings.get<boolean>("uniquePerDay");
-	const keep = await ctx.settings.get<string>("keepHistory");
-	const months = keep === "6" ? 6 : keep === "12" ? 12 : 3;
-	return {
-		uniquePerDay: typeof unique === "boolean" ? unique : true,
-		retentionDays: months * 30,
-	};
+	return { uniquePerDay: typeof unique === "boolean" ? unique : true };
 }
 
 /* ------------------------------------------------------------------ */
@@ -124,6 +125,7 @@ function stores(ctx: PluginContext) {
 		daily: ctx.storage.daily as StorageCollection<DailyRow>,
 		seen: ctx.storage.seen as StorageCollection<SeenRow>,
 		sources: ctx.storage.sources as StorageCollection<SourceRow>,
+		siteDaily: ctx.storage.sitedaily as StorageCollection<SiteDayRow>,
 	};
 }
 
@@ -176,10 +178,21 @@ async function entryCount(ctx: PluginContext, key: string, days: number, total: 
 	return sum;
 }
 
+/** Walk the site-wide one-row-per-day table between two days, inclusive. */
+async function eachSiteDay(ctx: PluginContext, since: string, until: string, visit: (row: SiteDayRow) => void): Promise<void> {
+	const { siteDaily } = stores(ctx);
+	let cursor: string | undefined;
+	do {
+		const page = await siteDaily.query({ where: { day: { gte: since, lte: until } }, limit: 100, cursor });
+		for (const row of page.items) visit(row.data);
+		cursor = page.hasMore ? page.cursor : undefined;
+	} while (cursor);
+}
+
 /** Site-wide views over the last `days` days. */
 async function siteCount(ctx: PluginContext, days: number): Promise<number> {
 	let sum = 0;
-	await eachDaily(ctx, daysAgo(days - 1), null, (r) => (sum += r.count));
+	await eachSiteDay(ctx, daysAgo(days - 1), today(), (r) => (sum += r.count));
 	return sum;
 }
 
@@ -187,17 +200,14 @@ async function siteCount(ctx: PluginContext, days: number): Promise<number> {
 async function siteSeries(ctx: PluginContext, days: number): Promise<[number, number][]> {
 	const byDay = new Map<string, number>();
 	for (let i = days - 1; i >= 0; i--) byDay.set(daysAgo(i), 0);
-	await eachDaily(ctx, daysAgo(days - 1), null, (r) => byDay.set(r.day, (byDay.get(r.day) ?? 0) + r.count));
+	await eachSiteDay(ctx, daysAgo(days - 1), today(), (r) => byDay.set(r.day, r.count));
 	return [...byDay.entries()].map(([day, n]) => [Date.parse(`${day}T00:00:00Z`), n]);
 }
 
 /** Site-wide views between two day offsets, inclusive: fromDaysAgo >= toDaysAgo. */
 async function siteWindow(ctx: PluginContext, fromDaysAgo: number, toDaysAgo: number): Promise<number> {
-	const until = daysAgo(toDaysAgo);
 	let sum = 0;
-	await eachDaily(ctx, daysAgo(fromDaysAgo), null, (r) => {
-		if (r.day <= until) sum += r.count;
-	});
+	await eachSiteDay(ctx, daysAgo(fromDaysAgo), daysAgo(toDaysAgo), (r) => (sum += r.count));
 	return sum;
 }
 
@@ -299,8 +309,7 @@ function snippet(pluginId: string): string {
 
 async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 	const { totals } = stores(ctx);
-	const settings = await loadSettings(ctx);
-	const retention = settings.retentionDays;
+	const retention = RETENTION_DAYS;
 	const days = await currentRange(ctx, retention);
 	const label = rangeLabel(days);
 	const chartDays = Math.min(days === 0 ? retention : days, retention);
@@ -382,7 +391,7 @@ async function overviewPage(ctx: PluginContext): Promise<BlockResponse> {
 		if (days === 0) {
 			blocks.push({
 				type: "context",
-				text: `All-time totals are exact. The chart and the sources cover the last ${Math.round(retention / 30)} months, as set by "Chart and periods go back" in the plugin settings.`,
+				text: "All-time totals are exact. The chart and the sources cover the last 12 months.",
 			});
 		}
 	}
@@ -534,11 +543,12 @@ async function purge<T>(col: StorageCollection<T>, where: Record<string, unknown
 }
 
 async function resetAll(ctx: PluginContext): Promise<void> {
-	const { totals, daily, seen, sources } = stores(ctx);
+	const { totals, daily, seen, sources, siteDaily } = stores(ctx);
 	await purge(totals, {});
 	await purge(daily, {});
 	await purge(seen, {});
 	await purge(sources, {});
+	await purge(siteDaily, {});
 }
 
 /* ------------------------------------------------------------------ */
@@ -561,11 +571,11 @@ const plugin: SandboxedPlugin = {
 		cron: async (event, ctx) => {
 			if (event.name !== "cleanup") return;
 			const { daily, seen } = stores(ctx);
-			const { retentionDays } = await loadSettings(ctx);
 			const dropSeen = await purge(seen, { day: { lt: today() } });
-			const dropDaily = await purge(daily, { day: { lt: daysAgo(retentionDays) } });
-			const dropSources = await purge(stores(ctx).sources, { day: { lt: daysAgo(retentionDays) } });
-			ctx.log.info("Post Views cleanup", { dropSeen, dropDaily, dropSources });
+			const dropDaily = await purge(daily, { day: { lt: daysAgo(RETENTION_DAYS) } });
+			const dropSources = await purge(stores(ctx).sources, { day: { lt: daysAgo(RETENTION_DAYS) } });
+			const dropSite = await purge(stores(ctx).siteDaily, { day: { lt: daysAgo(RETENTION_DAYS) } });
+			ctx.log.info("Post Views cleanup", { dropSeen, dropDaily, dropSources, dropSite });
 		},
 	},
 
@@ -614,6 +624,7 @@ const plugin: SandboxedPlugin = {
 					day,
 					count: 1,
 				}));
+				await bump<SiteDayRow>(stores(ctx).siteDaily, day, "count", () => ({ day, count: 1 }));
 				const refMeta = (routeCtx.requestMeta ?? {}) as { referer?: string | null };
 				const source = sourceOf(refMeta.referer, ctx.site.url);
 				await bump<SourceRow>(stores(ctx).sources, `${source}:${day}`, "count", () => ({ source, day, count: 1 }));
@@ -672,8 +683,7 @@ const plugin: SandboxedPlugin = {
 				if (i.type === "block_action") {
 					if (i.action_id === "set_range") {
 						const days = Number(i.value);
-						const { retentionDays } = await loadSettings(ctx);
-						if (rangesFor(retentionDays).some((r) => r.days === days)) await ctx.kv.set(RANGE_KEY, days);
+						if (rangesFor(RETENTION_DAYS).some((r) => r.days === days)) await ctx.kv.set(RANGE_KEY, days);
 						return overviewPage(ctx);
 					}
 					if (i.action_id === "reset_all") {
