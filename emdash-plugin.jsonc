@@ -5,7 +5,7 @@
 	"publisher": "did:plc:vvm75pgx6ihqfuil7y5awyge",
 
 	"name": "Post Views",
-	"description": "See which posts and pages people read. Views on your dashboard and in the editor. No Google, no cookies.",
+	"description": "See which posts and pages people read. Views on your dashboard and in the editor. Private, nothing leaves your site.",
 	"keywords": ["views", "analytics", "popular posts", "statistics", "privacy"],
 	"repo": "https://github.com/desidashlab/emdash-post-views",
 
