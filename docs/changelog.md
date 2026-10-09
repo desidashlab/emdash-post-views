@@ -1,3 +1,7 @@
+## 0.2.3
+
+- New banner that also looks right in the admin's registry page, where the banner shows as a thin strip. No changes to the plugin itself.
+
 ## 0.2.2
 
 - Banner redrawn in the registry's 3:1 shape so link previews show it whole. No changes to the plugin itself.
