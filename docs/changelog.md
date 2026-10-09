@@ -1,3 +1,7 @@
+## 0.2.4
+
+- Banner fits link previews on social sites as well as the admin's registry page. No changes to the plugin itself.
+
 ## 0.2.3
 
 - New banner that also looks right in the admin's registry page, where the banner shows as a thin strip. No changes to the plugin itself.
